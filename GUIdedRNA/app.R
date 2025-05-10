@@ -1,0 +1,627 @@
+# Load required libraries
+library(shiny)
+library(shinydashboard)
+library(shinycssloaders)
+library(Seurat)
+library(ggplot2)
+library(DT)
+library(Matrix)
+library(dplyr)
+#library(GUIdedRNA)
+
+
+options(shiny.maxRequestSize = 100 * 1024^3)
+
+# Define UI
+ui <- dashboardPage(
+  dashboardHeader(title = "GUIdedRNA - scRNA analysis interface"),
+  
+  # Sidebar with analysis steps
+  dashboardSidebar(
+    sidebarMenu(
+      id = "tabs",
+      menuItem("Upload Data", tabName = "upload", icon = icon("upload")),
+      menuItem("Preprocessing", tabName = "preprocess", icon = icon("check-circle")),
+      menuItem("Quality Control", tabName = "qc", icon = icon("check-circle")),
+      menuItem("Normalization", tabName = "normalize", icon = icon("chart-line")),
+      menuItem("Feature Selection", tabName = "features", icon = icon("list")),
+      menuItem("Dimensionality Reduction", tabName = "dimreduce", icon = icon("project-diagram")),
+      menuItem("Clustering", tabName = "cluster", icon = icon("object-group")),
+      menuItem("Cell Type Annotation", tabName = "annotate", icon = icon("tags")),
+      menuItem("Download Results", tabName = "download", icon = icon("download"))
+    )
+  ),
+  
+  # Main panel with tabbed content
+  dashboardBody(
+    tabItems(
+      # Upload Data tab
+      tabItem(tabName = "upload",
+              fluidRow(
+                box(
+                  title = "Upload 10X Genomics files",
+                  width = 12,
+                  fileInput("matrixFile", "Matrix (.mtx)"),
+                  fileInput("featuresFile", "Features/Genes (.tsv/.txt)"),
+                  fileInput("barcodesFile", "Barcodes (.tsv/.txt)"),
+                  actionButton("loadData", "Load Data")
+                ),
+              ),
+              
+              fluidRow(
+                box(
+                  title = "Upload Folder",
+                  width = 12,
+                  fileInput("raw_input_folder", "Folder"),
+                  actionButton("loadData", "Load Data")
+                ),
+              ),
+              
+              fluidRow(
+                box(
+                  title = "Upload Folder of Folders",
+                  width = 12,
+                  fileInput("raw_input_folder", "Folder"),
+                  actionButton("loadData", "Load Data")
+                ),
+              ),
+              
+              fluidRow(
+                box(
+                  title = "Data Summary",
+                  width = 12,
+                  verbatimTextOutput("dataSummary")
+                )
+              )
+      ),
+      
+      # Quality Control tab
+      tabItem(tabName = "qc",
+              fluidRow(
+                box(
+                  title = "QC Parameters",
+                  width = 4,
+                  sliderInput("minGenes", "Min Genes per Cell", min = 0, max = 5000, value = 200),
+                  sliderInput("maxGenes", "Max Genes per Cell", min = 0, max = 10000, value = 5000),
+                  sliderInput("maxMito", "Max Mitochondrial %", min = 0, max = 100, value = 20),
+                  actionButton("runQC", "Run QC")
+                ),
+                box(
+                  title = "QC Metrics",
+                  width = 8,
+                  plotOutput("qcPlot") %>% withSpinner()
+                )
+              ),
+              fluidRow(
+                box(
+                  title = "Filtered Data Summary",
+                  width = 12,
+                  verbatimTextOutput("qcSummary")
+                )
+              )
+      ),
+      
+      # Additional tabs for other pipeline steps...
+      
+      # Normalization tab
+      tabItem(tabName = "normalize",
+              fluidRow(
+                box(
+                  title = "Normalization Method",
+                  width = 4,
+                  selectInput("normMethod", "Method", 
+                              choices = c("LogNormalize", "SCTransform"), 
+                              selected = "LogNormalize"),
+                  conditionalPanel(
+                    condition = "input.normMethod == 'LogNormalize'",
+                    numericInput("scaleFactor", "Scale Factor", value = 10000)
+                  ),
+                  actionButton("runNorm", "Run Normalization")
+                ),
+                box(
+                  title = "Normalization Results",
+                  width = 8,
+                  plotOutput("normPlot") %>% withSpinner()
+                )
+              )
+      ),
+      
+      # Feature Selection tab
+      tabItem(tabName = "features",
+              fluidRow(
+                box(
+                  title = "Variable Features Parameters",
+                  width = 4,
+                  numericInput("nFeatures", "Number of Features", value = 2000),
+                  actionButton("findVarFeatures", "Find Variable Features")
+                ),
+                box(
+                  title = "Variable Features Plot",
+                  width = 8,
+                  plotOutput("varFeaturesPlot") %>% withSpinner()
+                )
+              ),
+              fluidRow(
+                box(
+                  title = "Top Variable Features",
+                  width = 12,
+                  DTOutput("topFeaturesTable")
+                )
+              )
+      ),
+      
+      # Dimensionality Reduction tab
+      tabItem(tabName = "dimreduce",
+              fluidRow(
+                box(
+                  title = "PCA Parameters",
+                  width = 4,
+                  numericInput("nPCs", "Number of PCs", value = 30),
+                  actionButton("runPCA", "Run PCA")
+                ),
+                box(
+                  title = "PCA Results",
+                  width = 8,
+                  plotOutput("pcaPlot") %>% withSpinner(),
+                  plotOutput("elbowPlot") %>% withSpinner()
+                )
+              ),
+              fluidRow(
+                box(
+                  title = "UMAP/t-SNE Parameters",
+                  width = 4,
+                  numericInput("pcDims", "PCs to Use", value = 20),
+                  selectInput("reduction", "Reduction Method", 
+                              choices = c("UMAP", "t-SNE"), 
+                              selected = "UMAP"),
+                  actionButton("runReduction", "Run Reduction")
+                ),
+                box(
+                  title = "Reduction Results",
+                  width = 8,
+                  plotOutput("reductionPlot") %>% withSpinner()
+                )
+              )
+      ),
+      
+      # Clustering tab
+      tabItem(tabName = "cluster",
+              fluidRow(
+                box(
+                  title = "Clustering Parameters",
+                  width = 4,
+                  selectInput("clusterAlgo", "Algorithm", 
+                              choices = c("Louvain", "Leiden"), 
+                              selected = "Louvain"),
+                  sliderInput("resolution", "Resolution", min = 0.1, max = 2.0, value = 0.8, step = 0.1),
+                  actionButton("runClustering", "Run Clustering")
+                ),
+                box(
+                  title = "Clustering Results",
+                  width = 8,
+                  plotOutput("clusterPlot") %>% withSpinner()
+                )
+              ),
+              fluidRow(
+                box(
+                  title = "Cluster Statistics",
+                  width = 12,
+                  DTOutput("clusterStats")
+                )
+              )
+      ),
+      
+      # Cell Type Annotation tab
+      tabItem(tabName = "annotate",
+              fluidRow(
+                box(
+                  title = "Marker Gene Analysis",
+                  width = 4,
+                  numericInput("maxMarkers", "Max Markers per Cluster", value = 10),
+                  actionButton("findMarkers", "Find Markers")
+                ),
+                box(
+                  title = "Marker Gene Results",
+                  width = 8,
+                  DTOutput("markerTable") %>% withSpinner()
+                )
+              ),
+              fluidRow(
+                box(
+                  title = "Cell Type Assignment",
+                  width = 12,
+                  uiOutput("cellTypeUI"),
+                  actionButton("assignCellTypes", "Assign Cell Types")
+                )
+              ),
+              fluidRow(
+                box(
+                  title = "Annotated Clusters",
+                  width = 12,
+                  plotOutput("annotatedPlot") %>% withSpinner()
+                )
+              )
+      ),
+      
+      # Download Results tab
+      tabItem(tabName = "download",
+              fluidRow(
+                box(
+                  title = "Download Options",
+                  width = 12,
+                  checkboxGroupInput("downloadItems", "Select Items to Download:",
+                                     choices = c("Processed Seurat Object (RDS)" = "rds",
+                                                 "Cell Metadata (CSV)" = "meta",
+                                                 "Marker Genes (CSV)" = "markers",
+                                                 "Dimensionality Reduction Coordinates (CSV)" = "dimred",
+                                                 "Analysis Report (HTML)" = "report")),
+                  downloadButton("downloadData", "Download Selected Items")
+                )
+              )
+      )
+    )
+  )
+)
+
+# Define server logic
+server <- function(input, output, session) {
+  # Reactive values to store data and analysis state
+  values <- reactiveValues(
+    seurat = NULL,
+    original_seurat = NULL,
+    qc_done = FALSE,
+    norm_done = FALSE,
+    features_done = FALSE,
+    pca_done = FALSE,
+    reduction_done = FALSE,
+    cluster_done = FALSE,
+    markers_done = FALSE,
+    annotation_done = FALSE
+  )
+  
+  # Data loading logic
+  observeEvent(input$loadData, {
+    req(input$matrixFile, input$featuresFile, input$barcodesFile)
+    
+    withProgress(message = 'Loading data...', {
+      # Create temporary directory
+      temp_dir <- tempdir()
+      matrix_path <- file.path(temp_dir, "matrix.mtx")
+      features_path <- file.path(temp_dir, "features.tsv")
+      barcodes_path <- file.path(temp_dir, "barcodes.tsv")
+      
+      # Save uploaded files
+      file.copy(input$matrixFile$datapath, matrix_path)
+      file.copy(input$featuresFile$datapath, features_path)
+      file.copy(input$barcodesFile$datapath, barcodes_path)
+      
+      # Read data
+      counts <- Seurat::ReadMtx(
+        mtx = matrix_path,
+        features = features_path,
+        cells = barcodes_path
+      )
+      
+      # Create Seurat object
+      seurat_obj <- Seurat::CreateSeuratObject(counts = counts)
+      
+      # Calculate percent mitochondrial
+      seurat_obj[["percent.mt"]] <- Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+      
+      # Store in reactive values
+      values$seurat <- seurat_obj
+      values$original_seurat <- seurat_obj
+    })
+    
+    # Show data summary
+    output$dataSummary <- renderPrint({
+      req(values$seurat)
+      cat("Dataset loaded successfully.\n")
+      cat(paste("Number of cells:", ncol(values$seurat), "\n"))
+      cat(paste("Number of genes:", nrow(values$seurat), "\n"))
+      cat("\nSample of gene names:\n")
+      print(head(rownames(values$seurat)))
+      cat("\nSample of cell barcodes:\n")
+      print(head(colnames(values$seurat)))
+    })
+    
+    # Navigate to QC tab
+    updateTabItems(session, "tabs", "qc")
+  })
+  
+  # Quality Control logic
+  output$qcPlot <- renderPlot({
+    req(values$seurat)
+    VlnPlot(values$seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+  })
+  
+  observeEvent(input$runQC, {
+    req(values$seurat)
+    
+    withProgress(message = 'Running QC filtering...', {
+      # Apply QC filtering
+      filtered_seurat <- subset(values$seurat, 
+                                nFeature_RNA > input$minGenes & 
+                                  nFeature_RNA < input$maxGenes & 
+                                  percent.mt < input$maxMito)
+      
+      # Update Seurat object
+      values$seurat <- filtered_seurat
+      values$qc_done <- TRUE
+    })
+    
+    # Show QC summary
+    output$qcSummary <- renderPrint({
+      req(values$seurat)
+      cat("QC filtering completed.\n")
+      cat(paste("Cells before filtering:", ncol(values$original_seurat), "\n"))
+      cat(paste("Cells after filtering:", ncol(values$seurat), "\n"))
+      cat(paste("Cells removed:", ncol(values$original_seurat) - ncol(values$seurat), "\n"))
+    })
+    
+    # Navigate to next tab
+    updateTabItems(session, "tabs", "normalize")
+  })
+  
+  # Additional server logic for other pipeline steps...
+  
+  # Normalization logic
+  observeEvent(input$runNorm, {
+    req(values$seurat, values$qc_done)
+    
+    withProgress(message = 'Running normalization...', {
+      if(input$normMethod == "LogNormalize") {
+        values$seurat <- NormalizeData(values$seurat, 
+                                       normalization.method = "LogNormalize", 
+                                       scale.factor = input$scaleFactor)
+      } else if(input$normMethod == "SCTransform") {
+        values$seurat <- SCTransform(values$seurat)
+      }
+      
+      values$norm_done <- TRUE
+    })
+    
+    # Plot distribution of normalized data
+    output$normPlot <- renderPlot({
+      req(values$seurat, values$norm_done)
+      # Sample a few genes to show normalized expression distribution
+      genes_to_plot <- sample(rownames(values$seurat), 4)
+      VlnPlot(values$seurat, features = genes_to_plot, ncol = 2)
+    })
+    
+    # Navigate to next tab
+    updateTabItems(session, "tabs", "features")
+  })
+  
+  # Feature selection logic
+  observeEvent(input$findVarFeatures, {
+    req(values$seurat, values$norm_done)
+    
+    withProgress(message = 'Finding variable features...', {
+      values$seurat <- FindVariableFeatures(values$seurat, 
+                                            selection.method = "vst", 
+                                            nfeatures = input$nFeatures)
+      
+      values$features_done <- TRUE
+    })
+    
+    # Plot variable features
+    output$varFeaturesPlot <- renderPlot({
+      req(values$seurat, values$features_done)
+      VariableFeaturePlot(values$seurat)
+    })
+    
+    # Show top variable features
+    output$topFeaturesTable <- renderDT({
+      req(values$seurat, values$features_done)
+      top_features <- head(VariableFeatures(values$seurat), 20)
+      data.frame(
+        Feature = top_features,
+        Mean = rowMeans(values$seurat@assays$RNA@data[top_features, ])
+      )
+    })
+    
+    # Navigate to next tab
+    updateTabItems(session, "tabs", "dimreduce")
+  })
+  
+  # Dimensionality reduction logic
+  observeEvent(input$runPCA, {
+    req(values$seurat, values$features_done)
+    
+    withProgress(message = 'Running PCA...', {
+      values$seurat <- ScaleData(values$seurat, features = VariableFeatures(values$seurat))
+      values$seurat <- RunPCA(values$seurat, features = VariableFeatures(values$seurat), npcs = input$nPCs)
+      
+      values$pca_done <- TRUE
+    })
+    
+    # Plot PCA results
+    output$pcaPlot <- renderPlot({
+      req(values$seurat, values$pca_done)
+      DimPlot(values$seurat, reduction = "pca")
+    })
+    
+    # Plot elbow plot
+    output$elbowPlot <- renderPlot({
+      req(values$seurat, values$pca_done)
+      ElbowPlot(values$seurat, ndims = input$nPCs)
+    })
+  })
+  
+  observeEvent(input$runReduction, {
+    req(values$seurat, values$pca_done)
+    
+    withProgress(message = paste('Running', input$reduction, '...'), {
+      if(input$reduction == "UMAP") {
+        values$seurat <- RunUMAP(values$seurat, dims = 1:input$pcDims)
+      } else if(input$reduction == "t-SNE") {
+        values$seurat <- RunTSNE(values$seurat, dims = 1:input$pcDims)
+      }
+      
+      values$reduction_done <- TRUE
+    })
+    
+    # Plot reduction results
+    output$reductionPlot <- renderPlot({
+      req(values$seurat, values$reduction_done)
+      DimPlot(values$seurat, reduction = tolower(input$reduction))
+    })
+    
+    # Navigate to next tab
+    updateTabItems(session, "tabs", "cluster")
+  })
+  
+  # Clustering logic
+  observeEvent(input$runClustering, {
+    req(values$seurat, values$reduction_done)
+    
+    withProgress(message = 'Running clustering...', {
+      # Find neighbors
+      values$seurat <- FindNeighbors(values$seurat, dims = 1:input$pcDims)
+      
+      # Find clusters
+      algorithm <- ifelse(input$clusterAlgo == "Louvain", 1, 4) # 1 for Louvain, 4 for Leiden
+      values$seurat <- FindClusters(values$seurat, resolution = input$resolution, algorithm = algorithm)
+      
+      values$cluster_done <- TRUE
+    })
+    
+    # Plot clustering results
+    output$clusterPlot <- renderPlot({
+      req(values$seurat, values$cluster_done)
+      DimPlot(values$seurat, reduction = tolower(input$reduction), group.by = "seurat_clusters", label = TRUE)
+    })
+    
+    # Show cluster statistics
+    output$clusterStats <- renderDT({
+      req(values$seurat, values$cluster_done)
+      table_data <- table(values$seurat$seurat_clusters)
+      data.frame(
+        Cluster = names(table_data),
+        Cell_Count = as.vector(table_data),
+        Percentage = round(as.vector(table_data) / sum(table_data) * 100, 2)
+      )
+    })
+    
+    # Navigate to next tab
+    updateTabItems(session, "tabs", "annotate")
+  })
+  
+  # Cell type annotation logic
+  observeEvent(input$findMarkers, {
+    req(values$seurat, values$cluster_done)
+    
+    withProgress(message = 'Finding marker genes...', {
+      # Find markers for each cluster
+      all_markers <- FindAllMarkers(values$seurat, 
+                                    only.pos = TRUE, 
+                                    min.pct = 0.25, 
+                                    logfc.threshold = 0.25)
+      
+      # Store markers
+      values$markers <- all_markers %>%
+        group_by(cluster) %>%
+        top_n(n = input$maxMarkers, wt = avg_log2FC)
+      
+      values$markers_done <- TRUE
+    })
+    
+    # Display marker table
+    output$markerTable <- renderDT({
+      req(values$markers, values$markers_done)
+      values$markers
+    })
+    
+    # Create UI for cell type assignment
+    output$cellTypeUI <- renderUI({
+      req(values$seurat, values$markers_done)
+      clusters <- levels(values$seurat$seurat_clusters)
+      
+      lapply(clusters, function(cluster) {
+        fluidRow(
+          column(4, paste0("Cluster ", cluster)),
+          column(8, textInput(paste0("label_cluster_", cluster), 
+                              label = NULL, 
+                              value = paste0("Cluster ", cluster)))
+        )
+      })
+    })
+  })
+  
+  observeEvent(input$assignCellTypes, {
+    req(values$seurat, values$markers_done)
+    
+    withProgress(message = 'Assigning cell types...', {
+      # Get cluster IDs and user-defined labels
+      clusters <- levels(values$seurat$seurat_clusters)
+      labels <- sapply(clusters, function(cluster) {
+        input[[paste0("label_cluster_", cluster)]]
+      })
+      
+      # Create new identity column
+      new_ids <- plyr::mapvalues(values$seurat$seurat_clusters, 
+                                 from = clusters, 
+                                 to = labels)
+      values$seurat$cell_type <- new_ids
+      
+      values$annotation_done <- TRUE
+    })
+    
+    # Plot annotated clusters
+    output$annotatedPlot <- renderPlot({
+      req(values$seurat, values$annotation_done)
+      DimPlot(values$seurat, reduction = tolower(input$reduction), group.by = "cell_type", label = TRUE)
+    })
+    
+    # Navigate to next tab
+    updateTabItems(session, "tabs", "download")
+  })
+  
+  # Download results logic
+  output$downloadData <- downloadHandler(
+    filename = function() {
+      paste("scRNA_results_", Sys.Date(), ".zip", sep = "")
+    },
+    content = function(file) {
+      # Create temporary directory
+      temp_dir <- tempdir()
+      
+      # Prepare files based on user selection
+      if("rds" %in% input$downloadItems) {
+        saveRDS(values$seurat, file.path(temp_dir, "seurat_object.rds"))
+      }
+      
+      if("meta" %in% input$downloadItems) {
+        write.csv(values$seurat@meta.data, file.path(temp_dir, "cell_metadata.csv"))
+      }
+      
+      if("markers" %in% input$downloadItems && !is.null(values$markers)) {
+        write.csv(values$markers, file.path(temp_dir, "marker_genes.csv"))
+      }
+      
+      if("dimred" %in% input$downloadItems && !is.null(values$reduction_done)) {
+        # Get the last used reduction
+        red_type <- tolower(input$reduction)
+        if(red_type %in% names(values$seurat@reductions)) {
+          coords <- as.data.frame(values$seurat@reductions[[red_type]]@cell.embeddings)
+          write.csv(coords, file.path(temp_dir, paste0(red_type, "_coordinates.csv")))
+        }
+      }
+      
+      if("report" %in% input$downloadItems) {
+        # Generate report (would need additional code for comprehensive report)
+        # Simple placeholder
+        cat("# scRNA-seq Analysis Report\n\nDate: ", Sys.Date(), 
+            "\n\n## Summary\n\n", file = file.path(temp_dir, "report.md"))
+      }
+      
+      # Zip all files
+      files_to_zip <- list.files(temp_dir, pattern = "\\.csv$|\\.rds$|\\.md$", full.names = TRUE)
+      zip(file, files_to_zip)
+    }
+  )
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
