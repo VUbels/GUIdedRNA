@@ -1,12 +1,15 @@
 # Load required libraries
 library(shiny)
 library(shinydashboard)
+library(shinyFiles)
 library(shinycssloaders)
+
 library(Seurat)
 library(ggplot2)
 library(DT)
 library(Matrix)
 library(dplyr)
+
 #library(GUIdedRNA)
 
 
@@ -14,15 +17,17 @@ options(shiny.maxRequestSize = 100 * 1024^3)
 
 # Define UI
 ui <- dashboardPage(
+  
+  skin = c("black"),
   dashboardHeader(title = "GUIdedRNA - scRNA analysis interface"),
   
   # Sidebar with analysis steps
   dashboardSidebar(
     sidebarMenu(
       id = "tabs",
-      menuItem("Upload Data", tabName = "upload", icon = icon("upload")),
-      menuItem("Preprocessing", tabName = "preprocess", icon = icon("check-circle")),
+      menuItem("Upload Data", tabName = "upload", icon = icon("upload"), selected = TRUE),
       menuItem("Quality Control", tabName = "qc", icon = icon("check-circle")),
+      menuItem("Preprocessing", tabName = "preprocess", icon = icon("filter")),
       menuItem("Normalization", tabName = "normalize", icon = icon("chart-line")),
       menuItem("Feature Selection", tabName = "features", icon = icon("list")),
       menuItem("Dimensionality Reduction", tabName = "dimreduce", icon = icon("project-diagram")),
@@ -44,27 +49,21 @@ ui <- dashboardPage(
                   fileInput("matrixFile", "Matrix (.mtx)"),
                   fileInput("featuresFile", "Features/Genes (.tsv/.txt)"),
                   fileInput("barcodesFile", "Barcodes (.tsv/.txt)"),
-                  actionButton("loadData", "Load Data")
+                  actionButton("loadData_file", "Load Data")
                 ),
               ),
               
               fluidRow(
                 box(
-                  title = "Upload Folder",
+                  title = "Upload Folder or list of Folders",
                   width = 12,
-                  fileInput("raw_input_folder", "Folder"),
-                  actionButton("loadData", "Load Data")
+                  shinyDirButton("folderBtn_single", "Select Directory", "Choose a directory with 10X data"),
+                  helpText("Select directory containing files, or directory containing dataset folders"),
+                  textOutput("selectedFolder"),
+                  actionButton("loadData_folder", "Load Data")
                 ),
               ),
               
-              fluidRow(
-                box(
-                  title = "Upload Folder of Folders",
-                  width = 12,
-                  fileInput("raw_input_folder", "Folder"),
-                  actionButton("loadData", "Load Data")
-                ),
-              ),
               
               fluidRow(
                 box(
@@ -81,9 +80,22 @@ ui <- dashboardPage(
                 box(
                   title = "QC Parameters",
                   width = 4,
-                  sliderInput("minGenes", "Min Genes per Cell", min = 0, max = 5000, value = 200),
-                  sliderInput("maxGenes", "Max Genes per Cell", min = 0, max = 10000, value = 5000),
-                  sliderInput("maxMito", "Max Mitochondrial %", min = 0, max = 100, value = 20),
+                  
+                  # Side by side gene count inputs
+                  fluidRow(
+                    column(6, numericInput("minGenes", "Min Genes", min = 0, value = 200, step = 100)),
+                    column(6, numericInput("maxGenes", "Max Genes", min = 0, value = 5000, step = 100))
+                  ),
+                  
+                  # Side by side feature inputs
+                  fluidRow(
+                    column(6, numericInput("minFeatures", "Min Features", min = 0, value = 100, step = 100)),
+                    column(6, numericInput("maxFeatures", "Max Features", min = 0, value = 3000, step = 100))
+                  ),
+                  
+                  # Single mitochondrial percentage input
+                  numericInput("maxMito", "Max Mitochondrial %", min = 0, max = 100, value = 20),
+                  
                   actionButton("runQC", "Run QC")
                 ),
                 box(
@@ -101,7 +113,6 @@ ui <- dashboardPage(
               )
       ),
       
-      # Additional tabs for other pipeline steps...
       
       # Normalization tab
       tabItem(tabName = "normalize",
@@ -278,9 +289,61 @@ server <- function(input, output, session) {
     markers_done = FALSE,
     annotation_done = FALSE
   )
+
+  # Define volumes in a platform-agnostic way
+  volumes <- c()
   
-  # Data loading logic
-  observeEvent(input$loadData, {
+  # Add home directory (works on all platforms)
+  volumes <- c(volumes, Home = fs::path_home())
+  
+  # Add root for Linux/Mac
+  if (.Platform$OS.type == "unix") {
+    volumes <- c(volumes, "Root" = "/")
+    
+    # Add common WSL paths if running in WSL
+    wsl_check <- system("grep -q Microsoft /proc/version", ignore.stdout = TRUE, ignore.stderr = TRUE)
+    if (wsl_check == 0) {  # Running in WSL
+      # Add Windows drives that might be mounted
+      if (dir.exists("/mnt/c")) volumes <- c(volumes, "C:" = "/mnt/c")
+      if (dir.exists("/mnt/d")) volumes <- c(volumes, "D:" = "/mnt/d")
+      if (dir.exists("/mnt/e")) volumes <- c(volumes, "E:" = "/mnt/e")
+      if (dir.exists("/mnt/f")) volumes <- c(volumes, "F:" = "/mnt/f")
+      if (dir.exists("/mnt/g")) volumes <- c(volumes, "G:" = "/mnt/g")
+      
+      # Add other common WSL locations
+      if (dir.exists("/mnt")) volumes <- c(volumes, "Windows Drives" = "/mnt")
+    }
+    
+    # Add other common Unix locations
+    if (dir.exists("/media")) volumes <- c(volumes, "Media" = "/media")
+    if (dir.exists("/mnt")) volumes <- c(volumes, "Mnt" = "/mnt")
+  }
+  
+  # Add Windows drives if on Windows
+  if (.Platform$OS.type == "windows") {
+    for (letter in LETTERS) {
+      drive <- paste0(letter, ":")
+      if (dir.exists(drive)) {
+        volumes <- c(volumes, drive)
+        names(volumes)[length(volumes)] <- paste0(letter, ":")
+      }
+    }
+  }
+  
+  # Initialize directory chooser
+  shinyDirChoose(input, "folderBtn_single", roots = volumes, session = session)
+  
+  # Display selected folder
+  output$selectedFolder <- renderText({
+    if (!is.null(input$folderBtn_single)) {
+      parseDirPath(volumes, input$folderBtn_single)
+    } else {
+      "No folder selected"
+    }
+  })
+    
+  # Data loading logic single dataset
+  observeEvent(input$loadData_file, {
     req(input$matrixFile, input$featuresFile, input$barcodesFile)
     
     withProgress(message = 'Loading data...', {
@@ -329,6 +392,213 @@ server <- function(input, output, session) {
     updateTabItems(session, "tabs", "qc")
   })
   
+  # Data loading for folder containing multiple datasets
+  shinyDirChoose(input, "folderBtn_single", roots = volumes, session = session)
+  
+  # Add display for selected folder
+  output$selectedFolder <- renderText({
+    if (!is.null(input$folderBtn_single)) {
+      parseDirPath(volumes, input$folderBtn_single)
+    } else {
+      "No folder selected"
+    }
+  })
+  
+
+  # Data loading for folder containing multiple datasets
+  observeEvent(input$loadData_folder, {
+    # Check if folder is selected
+    if (is.null(input$folderBtn_single)) {
+      showNotification("Please select a folder first", type = "error")
+      return(NULL)
+    }
+    
+    folder_path <- parseDirPath(volumes, input$folderBtn_single)
+    
+    # Check if path is valid
+    if (is.null(folder_path) || folder_path == "") {
+      showNotification("Please select a valid folder", type = "error")
+      return(NULL)
+    }
+    
+    withProgress(message = 'Processing folder...', {
+      # Initialize a list to store Seurat objects
+      seurat_list <- list()
+      
+      # 1. Process files in the main directory with pattern: name_matrix.mtx.gz, etc.
+      main_files <- list.files(folder_path, pattern = "(_matrix.mtx.gz|_features.tsv.gz|_barcodes.tsv.gz)$", 
+                               full.names = TRUE, recursive = FALSE)
+      
+      # Find base names for files in the main directory
+      main_base_names <- unique(sapply(strsplit(basename(main_files), 
+                                                "_matrix.mtx.gz|_features.tsv.gz|_barcodes.tsv.gz"), 
+                                       `[`, 1))
+      
+      # Process datasets in the main directory
+      for (base in main_base_names) {
+        setProgress(detail = paste("Processing", base))
+        
+        mtx_file <- file.path(folder_path, paste0(base, "_matrix.mtx.gz"))
+        features_file <- file.path(folder_path, paste0(base, "_features.tsv.gz"))
+        cells_file <- file.path(folder_path, paste0(base, "_barcodes.tsv.gz"))
+        
+        # Check if all files exist
+        if (file.exists(mtx_file) && file.exists(features_file) && file.exists(cells_file)) {
+          # Read the matrix
+          tryCatch({
+            # Read the matrix
+            counts <- Seurat::ReadMtx(
+              mtx = mtx_file,
+              features = features_file,
+              cells = cells_file
+            )
+            
+            # Create Seurat object
+            seurat_obj <- Seurat::CreateSeuratObject(counts = counts, project = base)
+            
+            # Calculate percent mitochondrial
+            seurat_obj[["percent.mt"]] <- Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+            
+            # Add to list
+            seurat_list[[base]] <- seurat_obj
+          }, error = function(e) {
+            showNotification(paste("Error processing", base, ":", e$message), type = "warning")
+          })
+        }
+      }
+      
+      # 2. Process subdirectories with standard 10X naming
+      subdirs <- list.dirs(folder_path, recursive = FALSE, full.names = TRUE)
+      
+      for (subdir in subdirs) {
+        subdir_name <- basename(subdir)
+        setProgress(detail = paste("Processing folder", subdir_name))
+        
+        # Construct the file paths for matrix, features, and barcodes
+        # Check for both .gz and non-gz versions
+        mtx_file <- NULL
+        for (pattern in c("matrix.mtx.gz", "matrix.mtx")) {
+          path <- file.path(subdir, pattern)
+          if (file.exists(path)) {
+            mtx_file <- path
+            break
+          }
+        }
+        
+        features_file <- NULL
+        for (pattern in c("features.tsv.gz", "features.tsv", "genes.tsv.gz", "genes.tsv")) {
+          path <- file.path(subdir, pattern)
+          if (file.exists(path)) {
+            features_file <- path
+            break
+          }
+        }
+        
+        cells_file <- NULL
+        for (pattern in c("barcodes.tsv.gz", "barcodes.tsv")) {
+          path <- file.path(subdir, pattern)
+          if (file.exists(path)) {
+            cells_file <- path
+            break
+          }
+        }
+        
+        # Check if all files exist in the subdirectory
+        if (!is.null(mtx_file) && !is.null(features_file) && !is.null(cells_file)) {
+          tryCatch({
+            # Read the matrix
+            counts <- Seurat::ReadMtx(
+              mtx = mtx_file,
+              features = features_file,
+              cells = cells_file
+            )
+            
+            # Create Seurat object
+            seurat_obj <- Seurat::CreateSeuratObject(counts = counts, project = subdir_name)
+            
+            # Calculate percent mitochondrial
+            seurat_obj[["percent.mt"]] <- Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+            
+            # Add to list
+            seurat_list[[subdir_name]] <- seurat_obj
+          }, error = function(e) {
+            showNotification(paste("Error processing folder", subdir_name, ":", e$message), type = "warning")
+          })
+        }
+      }
+      
+      # Check if any datasets were found
+      if (length(seurat_list) == 0) {
+        # Try one last approach - using Read10X directly on the folder
+        tryCatch({
+          counts <- Seurat::Read10X(data.dir = folder_path)
+          
+          # Create Seurat object
+          seurat_obj <- Seurat::CreateSeuratObject(counts = counts, project = basename(folder_path))
+          
+          # Calculate percent mitochondrial
+          seurat_obj[["percent.mt"]] <- Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+          
+          # Add to list
+          seurat_list[[basename(folder_path)]] <- seurat_obj
+        }, error = function(e) {
+          # Finally, if nothing works, show error
+          showNotification("No valid datasets found in the uploaded folder", type = "error")
+          return(NULL)
+        })
+      }
+      
+      # Combine datasets using Seurat v5's layer approach
+      if (length(seurat_list) == 1) {
+        # Only one dataset found
+        combined_seurat <- seurat_list[[1]]
+        
+        # Add origin column
+        combined_seurat$dataset_origin <- names(seurat_list)[1]
+      } else {
+        # First create a merged object with unique cell names
+        cell_ids <- names(seurat_list)
+        combined_seurat <- merge(
+          seurat_list[[1]], 
+          y = seurat_list[-1],
+          add.cell.ids = cell_ids,
+          project = "combined"
+        )
+        
+        # Add a dataset origin metadata column
+        combined_seurat$dataset_origin <- NA
+        for (i in seq_along(cell_ids)) {
+          dataset_name <- cell_ids[i]
+          # Match cells from this dataset by their prefix
+          cells_from_dataset <- grep(paste0("^", dataset_name, "_"), colnames(combined_seurat), value = TRUE)
+          combined_seurat$dataset_origin[colnames(combined_seurat) %in% cells_from_dataset] <- dataset_name
+        }
+      }
+      
+      # Store in reactive values
+      values$seurat <- combined_seurat
+      values$original_seurat <- combined_seurat
+      
+      # Show success notification
+      showNotification(paste("Loaded", length(seurat_list), "datasets successfully!"), type = "message")
+    })
+    
+    # Show data summary
+    output$dataSummary <- renderPrint({
+      req(values$seurat)
+      cat("Dataset loaded successfully.\n")
+      cat(paste("Number of cells:", ncol(values$seurat), "\n"))
+      cat(paste("Number of genes:", nrow(values$seurat), "\n"))
+      cat("\nSample of gene names:\n")
+      print(head(rownames(values$seurat)))
+      cat("\nSample of cell barcodes:\n")
+      print(head(colnames(values$seurat)))
+    })
+    
+    # Navigate to QC tab
+    updateTabItems(session, "tabs", "qc")
+  })
+
   # Quality Control logic
   output$qcPlot <- renderPlot({
     req(values$seurat)
@@ -343,6 +613,8 @@ server <- function(input, output, session) {
       filtered_seurat <- subset(values$seurat, 
                                 nFeature_RNA > input$minGenes & 
                                   nFeature_RNA < input$maxGenes & 
+                                  nCount_RNA > input$minFeatures &
+                                  nCount_RNA < input$maxFeatures &
                                   percent.mt < input$maxMito)
       
       # Update Seurat object
@@ -360,10 +632,22 @@ server <- function(input, output, session) {
     })
     
     # Navigate to next tab
-    updateTabItems(session, "tabs", "normalize")
+    updateTabItems(session, "tabs", "preprocess")
   })
   
-  # Additional server logic for other pipeline steps...
+  # # Other pre-processing steps
+  # observeEvent(input$runNorm,
+  #              
+  #              
+  #              
+  #              
+  #              
+  #              
+  #              
+  #              
+  #              )
+  
+  
   
   # Normalization logic
   observeEvent(input$runNorm, {
@@ -516,8 +800,8 @@ server <- function(input, output, session) {
       # Find markers for each cluster
       all_markers <- FindAllMarkers(values$seurat, 
                                     only.pos = TRUE, 
-                                    min.pct = 0.25, 
-                                    logfc.threshold = 0.25)
+                                    min.pct = 0.3, 
+                                    logfc.threshold = 0.5)
       
       # Store markers
       values$markers <- all_markers %>%
