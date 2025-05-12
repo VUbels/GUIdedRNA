@@ -93,9 +93,9 @@ preprocess_DoubletRemoval <- function(seurat_obj)
   
 }
 
-#####################################
-# Removal of decontaminated RNA
-#####################################
+#' Ambient RNA approximation on Seurat object
+#'
+#' Fully runs the ambient RNA approximation protocol through DecontX.
 
 runDecontX <- function(seurat_obj, seed=1){
   counts <- GetAssayData(object = seurat_obj, slot = "counts")
@@ -118,6 +118,10 @@ runDecontX <- function(seurat_obj, seed=1){
   return(seurat_obj)
 }
 
+#' Ambient RNA removal from Seurat object
+#'
+#' Uses DecontX protocol to approximate ambient RNA then runs this function to remove ambient RNA from counts matrix.
+
 Remove_lowRNA <- function(seurat_obj){
   nPreDecon <- dim(seurat_obj)[2]
   seurat_obj <- subset(seurat_obj, subset = (nFeature_RNA > minFeatures & nCount_RNA > minCounts))
@@ -129,14 +133,3 @@ Remove_lowRNA <- function(seurat_obj){
   return(seurat_obj)
   
 }
-
-#####################################
-# Cluster scRNA using iterative LSI
-#####################################
-
-suppressPackageStartupMessages({
-  library(dplyr)
-  library(Seurat)
-  library(patchwork)
-  library(Matrix)
-})

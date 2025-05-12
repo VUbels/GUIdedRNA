@@ -97,19 +97,21 @@ ui <- dashboardPage(
                   
                   # Side by side gene count inputs
                   fluidRow(
-                    column(6, numericInput("minGenes", "Min Genes", min = 0, value = 200, step = 100)),
-                    column(6, numericInput("maxGenes", "Max Genes", min = 0, value = 5000, step = 100))
+                    column(6, numericInput("minFeatures", "Min Genes", min = 0, value = 200, step = 100)),
+                    column(6, numericInput("maxFeatures", "Max Genes", min = 0, value = 5000, step = 100)),
+                    helpText("Determines minimum and maximum variety of genes in data")
                   ),
                   
                   # Side by side feature inputs
                   fluidRow(
-                    column(6, numericInput("minFeatures", "Min Features", min = 0, value = 100, step = 100)),
-                    column(6, numericInput("maxFeatures", "Max Features", min = 0, value = 3000, step = 100))
+                    column(6, numericInput("minCount", "Min Count", min = 0, value = 100, step = 100)),
+                    column(6, numericInput("maxCount", "Max Count", min = 0, value = 3000, step = 100)),
+                    helpText("Determines minimum and maximum total RNA count in data")
                   ),
                   
                   # Single mitochondrial percentage input
                   numericInput("maxMito", "Max Mitochondrial %", min = 0, max = 100, value = 20),
-                  
+                  helpText("Determines minimum and maximum mitochondrial RNA in data"),
                   actionButton("runQC", "Run QC")
                 ),
                 box(
@@ -649,10 +651,10 @@ server <- function(input, output, session) {
     withProgress(message = 'Running QC filtering...', {
       # Apply QC filtering
       filtered_seurat <- subset(values$seurat, 
-                                nFeature_RNA > input$minGenes & 
-                                  nFeature_RNA < input$maxGenes & 
-                                  nCount_RNA > input$minFeatures &
-                                  nCount_RNA < input$maxFeatures &
+                                nFeature_RNA > input$minFeatures & 
+                                  nFeature_RNA < input$maxFeatures & 
+                                  nCount_RNA > input$minCount &
+                                  nCount_RNA < input$maxCount &
                                   percent.mt < input$maxMito)
       
       # Update Seurat object
@@ -702,7 +704,7 @@ server <- function(input, output, session) {
         })
       }
       
-      if ("otherMethod" %in% selected_methods) {
+      if ("ambient" %in% selected_methods) {
         # Perform other preprocessing method
         incProgress(0.6)
         preprocessing_results$otherMethod <- tryCatch({
