@@ -4,7 +4,7 @@
 #' Assign_ExpectedDoublet_variable()
 
 
-Assign_ExpectedDoublet_variable <- function(val) {
+assign_ExpectedDoublet <- function(val) {
   
   # Initialize expected_doublet value
   expected_doublet<- NA
@@ -56,7 +56,7 @@ preprocess_DoubletRemoval <- function(seurat_obj)
   bcmvn <- find.pK(sweep.stats_obj)
   
   val <- length(seurat_obj@assays[["RNA"]]@counts@p)
-  expected_doublet <- Assign_ExpectedDoublet_variable(val)
+  expected_doublet <- assign_ExpectedDoublet(val)
 
   annotations <- seurat_obj@meta.data$seurat_clusters
   homotypic.prop <- modelHomotypic(annotations)
