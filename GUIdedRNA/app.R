@@ -2,6 +2,7 @@
 library(shiny)
 library(shinydashboard)
 library(shinyFiles)
+library(shinyjs)
 library(shinycssloaders)
 
 library(Seurat)
@@ -25,7 +26,7 @@ ui <- dashboardPage(
   dashboardSidebar(
     sidebarMenu(
       id = "tabs",
-      menuItem("Upload Data", tabName = "upload", icon = icon("upload"), selected = TRUE),
+      menuItem("Setup", tabName = "upload", icon = icon("upload"), selected = TRUE),
       menuItem("Quality Control", tabName = "qc", icon = icon("check-circle")),
       menuItem("Preprocessing", tabName = "preprocess", icon = icon("filter")),
       menuItem("Normalization", tabName = "normalize", icon = icon("chart-line")),
@@ -39,6 +40,8 @@ ui <- dashboardPage(
   
   # Main panel with tabbed content
   dashboardBody(
+    shinyjs::useShinyjs(),
+    
     tabItems(
       # Upload Data tab
       tabItem(tabName = "upload",
@@ -61,6 +64,17 @@ ui <- dashboardPage(
                   helpText("Select directory containing files, or directory containing dataset folders"),
                   textOutput("selectedFolder"),
                   actionButton("loadData_folder", "Load Data")
+                ),
+              ),
+              
+              fluidRow(
+                box(
+                  title = "Set Output Directory",
+                  width = 12,
+                  shinyDirButton("folderBtn_output", "Select Directory", "Choose an output directory"),
+                  helpText("Select directory that will contain all output"),
+                  textOutput("selectedFolder"),
+                  actionButton("outputData_folder", "Set Output Folder")
                 ),
               ),
               
@@ -113,6 +127,29 @@ ui <- dashboardPage(
               )
       ),
       
+      
+      tabItem(tabName = "preprocess",
+              fluidRow(
+                box(
+                  title = "Preprocessing Options",
+                  width = 4,
+                  checkboxGroupInput("preprocessMethods", "Select Preprocessing Methods", 
+                                     choices = c("Doublet Removal" = "doublet", 
+                                                 "Ambient RNA Removal" = "ambient"),
+                                     selected = c("doublet", "ambient")
+                                     
+                  ),
+                  actionButton("commitPreprocessing", "Run Selected Methods", 
+                               class = "btn-success", 
+                               style = "width: 100%;")
+                ),
+                box(
+                  title = "Preprocessing Results",
+                  width = 8,
+                  plotOutput("preprocessingPlot") %>% withSpinner()
+                )
+              )
+      ),
       
       # Normalization tab
       tabItem(tabName = "normalize",
@@ -281,6 +318,7 @@ server <- function(input, output, session) {
     seurat = NULL,
     original_seurat = NULL,
     qc_done = FALSE,
+    preprocess_done = FALSE,
     norm_done = FALSE,
     features_done = FALSE,
     pca_done = FALSE,
@@ -635,20 +673,65 @@ server <- function(input, output, session) {
     updateTabItems(session, "tabs", "preprocess")
   })
   
-  # # Other pre-processing steps
-  # observeEvent(input$runNorm,
-  #              
-  #              
-  #              
-  #              
-  #              
-  #              
-  #              
-  #              
-  #              )
-  
-  
-  
+  # Preprocessing logic triggered by commit button
+  observeEvent(input$commitPreprocessing, {
+    # Check which methods are selected
+    selected_methods <- input$preprocessMethods
+    
+    # If no methods are selected, show a notification and return
+    if (length(selected_methods) == 0) {
+      showNotification("Please select at least one preprocessing method", 
+                       type = "warning")
+      return()
+    }
+    
+    # Run preprocessing based on selected methods
+    preprocessing_results <- list()
+    
+    # Progress indication
+    withProgress(message = 'Processing...', value = 0.1, {
+      if ("doublet" %in% selected_methods) {
+        # Perform doublet removal
+        incProgress(0.3)
+        preprocessing_results$doublet <- tryCatch({
+          perform_doublet_removal()
+        }, error = function(e) {
+          showNotification(paste("Error in Doublet Removal:", e$message), 
+                           type = "error")
+          NULL
+        })
+      }
+      
+      if ("otherMethod" %in% selected_methods) {
+        # Perform other preprocessing method
+        incProgress(0.6)
+        preprocessing_results$otherMethod <- tryCatch({
+          perform_other_method()
+        }, error = function(e) {
+          showNotification(paste("Error in Other Method:", e$message), 
+                           type = "error")
+          NULL
+        })
+      }
+      
+      # Update the plot or results
+      output$preprocessingPlot <- renderPlot({
+        # Create a plot or visualization of preprocessing results
+        # This will depend on your specific preprocessing methods
+        if (length(preprocessing_results) > 0) {
+          # Example plot logic - adjust according to your needs
+          # You might want to create different plots based on selected methods
+          par(mfrow = c(1, length(preprocessing_results)))
+          for (method in names(preprocessing_results)) {
+            # Placeholder - replace with actual plotting logic
+            plot(preprocessing_results[[method]], 
+                 main = paste("Results:", method))
+          }
+        }
+      })
+    })
+  })
+
   # Normalization logic
   observeEvent(input$runNorm, {
     req(values$seurat, values$qc_done)
