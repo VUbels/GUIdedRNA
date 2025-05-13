@@ -73,7 +73,7 @@ ui <- dashboardPage(
                   width = 12,
                   shinyDirButton("folderBtn_output", "Select Directory", "Choose an output directory"),
                   helpText("Select directory that will contain all output"),
-                  textOutput("selectedFolder"),
+                  textOutput("outputFolder"),
                   actionButton("outputData_folder", "Set Output Folder")
                 ),
               ),
@@ -373,7 +373,7 @@ server <- function(input, output, session) {
   # Initialize directory chooser
   shinyDirChoose(input, "folderBtn_single", roots = volumes, session = session)
   
-  # Display selected folder
+  # Display selected input folder
   output$selectedFolder <- renderText({
     if (!is.null(input$folderBtn_single)) {
       parseDirPath(volumes, input$folderBtn_single)
@@ -381,6 +381,19 @@ server <- function(input, output, session) {
       "No folder selected"
     }
   })
+  
+  # Initialize directory chooser
+  shinyDirChoose(input, "folderBtn_output", roots = volumes, session = session)
+  
+  # Display selected output folder
+  output$outputFolder <- renderText({
+    if (!is.null(input$folderBtn_output)) {
+      parseDirPath(volumes, input$folderBtn_output)
+    } else {
+      "No folder selected"
+    }
+  })
+  
     
   # Data loading logic single dataset
   observeEvent(input$loadData_file, {
@@ -588,36 +601,9 @@ server <- function(input, output, session) {
         })
       }
       
-      # Combine datasets using Seurat v5's layer approach
-      if (length(seurat_list) == 1) {
-        # Only one dataset found
-        combined_seurat <- seurat_list[[1]]
-        
-        # Add origin column
-        combined_seurat$dataset_origin <- names(seurat_list)[1]
-      } else {
-        # First create a merged object with unique cell names
-        cell_ids <- names(seurat_list)
-        combined_seurat <- merge(
-          seurat_list[[1]], 
-          y = seurat_list[-1],
-          add.cell.ids = cell_ids,
-          project = "combined"
-        )
-        
-        # Add a dataset origin metadata column
-        combined_seurat$dataset_origin <- NA
-        for (i in seq_along(cell_ids)) {
-          dataset_name <- cell_ids[i]
-          # Match cells from this dataset by their prefix
-          cells_from_dataset <- grep(paste0("^", dataset_name, "_"), colnames(combined_seurat), value = TRUE)
-          combined_seurat$dataset_origin[colnames(combined_seurat) %in% cells_from_dataset] <- dataset_name
-        }
-      }
-      
-      # Store in reactive values
-      values$seurat <- combined_seurat
-      values$original_seurat <- combined_seurat
+      # Store the list in reactive values - instead of combining objects
+      values$seurat_list <- seurat_list
+      values$original_seurat_list <- seurat_list
       
       # Show success notification
       showNotification(paste("Loaded", length(seurat_list), "datasets successfully!"), type = "message")
@@ -625,14 +611,27 @@ server <- function(input, output, session) {
     
     # Show data summary
     output$dataSummary <- renderPrint({
-      req(values$seurat)
-      cat("Dataset loaded successfully.\n")
-      cat(paste("Number of cells:", ncol(values$seurat), "\n"))
-      cat(paste("Number of genes:", nrow(values$seurat), "\n"))
-      cat("\nSample of gene names:\n")
-      print(head(rownames(values$seurat)))
-      cat("\nSample of cell barcodes:\n")
-      print(head(colnames(values$seurat)))
+      req(values$seurat_list)
+      cat("Datasets loaded successfully.\n")
+      cat(paste("Number of datasets:", length(values$seurat_list), "\n\n"))
+      
+      # Print summary information for each dataset
+      for (dataset_name in names(values$seurat_list)) {
+        seurat_obj <- values$seurat_list[[dataset_name]]
+        cat(paste0("Dataset: ", dataset_name, "\n"))
+        cat(paste("  Number of cells:", ncol(seurat_obj), "\n"))
+        cat(paste("  Number of genes:", nrow(seurat_obj), "\n"))
+        cat("\n")
+      }
+      
+      # Show sample of gene names from first dataset
+      if (length(values$seurat_list) > 0) {
+        first_dataset <- values$seurat_list[[1]]
+        cat("Sample of gene names from first dataset:\n")
+        print(head(rownames(first_dataset)))
+        cat("\nSample of cell barcodes from first dataset:\n")
+        print(head(colnames(first_dataset)))
+      }
     })
     
     # Navigate to QC tab
@@ -718,7 +717,6 @@ server <- function(input, output, session) {
       
       # Update the plot or results
       output$preprocessingPlot <- renderPlot({
-        # Create a plot or visualization of preprocessing results
         # This will depend on your specific preprocessing methods
         if (length(preprocessing_results) > 0) {
           # Example plot logic - adjust according to your needs

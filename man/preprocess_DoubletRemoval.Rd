@@ -4,8 +4,8 @@
 \alias{preprocess_DoubletRemoval}
 \title{Doublet Removal function}
 \usage{
-preprocess_DoubletRemoval(seurat_obj)
+preprocess_DoubletRemoval(seurat_list)
 }
 \description{
-Fully runs the doublet removal protocol through DoubletFinder() based on variable from Assign_ExpectedDoublet_variable(), Returns Seurat object with TRUE/FALSE assignment to duplicate cells in META data
+Fully runs the doublet removal protocol through DoubletFinder() based on variable from Assign_ExpectedDoublet_variable(), Returns Seurat object with TRUE/FALSE assignment to duplicate cells in META data. Finally, returns reactive object and associated figures in output folder.
 }

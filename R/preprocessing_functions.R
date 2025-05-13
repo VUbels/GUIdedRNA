@@ -40,22 +40,30 @@ assign_ExpectedDoublet <- function(val) {
 
 #' Doublet Removal function
 #'
-#' Fully runs the doublet removal protocol through DoubletFinder() based on variable from Assign_ExpectedDoublet_variable(), Returns Seurat object with TRUE/FALSE assignment to duplicate cells in META data
+#' Fully runs the doublet removal protocol through DoubletFinder() based on variable from Assign_ExpectedDoublet_variable(), Returns Seurat object with TRUE/FALSE assignment to duplicate cells in META data. Finally, returns reactive object and associated figures in output folder.
 
+preprocess_DoubletRemoval <- function(seurat_list)
 
-preprocess_DoubletRemoval <- function(seurat_obj)
-{
+  {
+  
+  
+  processed_list <- list()
+  object_list <- names(seurat_list)
+  
+  for (dataset in object_list){
+  
+  seurat_obj <- seurat_list[[dataset]]  
   seurat_obj <- Seurat::NormalizeData(seurat_obj)
   seurat_obj <- Seurat::FindVariableFeatures(seurat_obj, selection.method = "vst", nfeatures = 2000)
   seurat_obj <- Seurat::ScaleData(seurat_obj)
   seurat_obj <- Seurat::RunPCA(seurat_obj)
   seurat_obj <- Seurat::RunUMAP(seurat_obj, dims = 1:10)
   
-  sweep.res.list_obj <- paramSweep(seu_obj, PCs = 1:10, sct = FALSE)
+  sweep.res.list_obj <- paramSweep(seurat_obj, PCs = 1:10, sct = FALSE)
   sweep.stats_obj <- summarizeSweep(sweep.res.list_obj, GT = FALSE)
   bcmvn <- find.pK(sweep.stats_obj)
-  
-  val <- length(seurat_obj@assays[["RNA"]]@counts@p)
+
+  val <- length(seurat_obj@assays$RNA@layers$counts@p)
   expected_doublet <- assign_ExpectedDoublet(val)
 
   annotations <- seurat_obj@meta.data$seurat_clusters
@@ -63,15 +71,17 @@ preprocess_DoubletRemoval <- function(seurat_obj)
   nExp_poi <- round(expected_doublet*nrow(seurat_obj@meta.data))
   nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
   
-  seurat_obj <- doubletFinder(seu_kidney, PCs = 1:10, pN = 0.25, pK = 0.09, nExp = nExp_poi.adj, reuse.pANN = NULL, sct = FALSE)
+  seurat_obj <- doubletFinder(seurat_obj, PCs = 1:10, pN = 0.25, pK = 0.09, nExp = nExp_poi.adj, reuse.pANN = NULL, sct = FALSE)
   
   # Create the plot
   
+  bcmvn$pK <- as.numeric(bcmvn$pK)
   range_x <- range(bcmvn$pK)
   positions <- seq(range_x[1], range_x[2], length.out = 6)
+  x_at_max <- which.max(bcmvn$BCmetric)
   
   plot_obj <- ggplot(bcmvn, aes(pK, BCmetric, group = 1)) +
-    ggtitle(seurat_names) +
+    ggtitle(dataset) +
     geom_point() +
     geom_line() +
     geom_vline(aes(xintercept = x_at_max), linetype="dashed", color = "black") +
@@ -84,12 +94,14 @@ preprocess_DoubletRemoval <- function(seurat_obj)
           panel.grid.major.x = element_blank(),
           panel.grid.minor.x = element_blank())
   
-  output_filename <- paste0(output_directory, "Clustering_01/DoubletFinderFunction_", seurat_names, ".png")
+  output_filename <- paste0(output_directory, "Clustering_01/DoubletFinderFunction_", dataset, ".png")
   ggsave(filename = output_filename, plot = plot_obj, width = 6, height = 4, bg = 'white')
   
-  paste0(output_directory, output_filename)
-  
-  return(seurat_obj)
+  processed_list[[dataset]] <- seurat_obj
+
+  }
+
+  return(processed_list)
   
 }
 
@@ -97,7 +109,15 @@ preprocess_DoubletRemoval <- function(seurat_obj)
 #'
 #' Fully runs the ambient RNA approximation protocol through DecontX.
 
-runDecontX <- function(seurat_obj, seed=1){
+preprocess_AmbientRNA <- function(seurat_obj, seed=1)
+  
+  {
+  
+  processed_list <- list()
+  
+  
+  
+  
   counts <- GetAssayData(object = seurat_obj, slot = "counts")
   clusters <- Idents(seurat_obj) %>% as.numeric()
   
