@@ -110,7 +110,7 @@ preprocess_DoubletRemoval <- function(seurat_list) {
             panel.grid.minor.x = element_blank())
     
     tryCatch({
-      output_filename <- paste0(output_folder, "/Clustering_01/DoubletFinderFunction_", dataset, ".png")
+      output_filename <- paste0(output_folder, "/Preprocessing/DoubletRemoval_", dataset, ".png")
       dir.create(dirname(output_filename), showWarnings = FALSE, recursive = TRUE)
       ggsave(filename = output_filename, plot = plot_obj, width = 6, height = 4, bg = 'white')
       send_message(paste("  - Saved plot to:", output_filename))

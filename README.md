@@ -14,8 +14,8 @@ This repository contains a Docker-based Shiny application that can be used for s
 On LinuxMac
 
 ```bash
-git clone httpsgithub.comyourusernamescRNA-shiny-app.git
-cd scRNA-shiny-app
+git clone https://github.com/VUbels/GUIdedRNA
+cd GUIdedRNA
 chmod +x run.sh
 .run.sh
 ```
@@ -23,8 +23,8 @@ chmod +x run.sh
 On Windows
 
 ```cmd
-git clone httpsgithub.comyourusernamescRNA-shiny-app.git
-cd scRNA-shiny-app
+git clone https://github.com/VUbels/GUIdedRNA
+cd GUIdedRNA
 setup.bat
 ```
 
@@ -32,31 +32,22 @@ Once running, open your browser and go to httplocalhost3838
 
 ## Future Extensions
 
-This demo provides a foundation that can be extended to create a full single-cell RNA analysis pipeline with features like
+This demo provides a foundation currently including a full single-cell RNA analysis annotation pipeline that can be used for:
 
-- Data uploading and preprocessing
+- Data uploading
 - Quality control and filtering
+- Doublet Removal
+- Ambient RNA Removal
 - Normalization and scaling
 - Dimension reduction (PCA, t-SNE, UMAP)
+- Adjust Latent Semantic Indexing approach for cluster annotation
 - Clustering and marker gene identification
 - Interactive visualization of results
-
-## Customizing for scRNA-seq Analysis
-
-To extend this app for real scRNA-seq analysis
-
-1. Add Bioconductor packages to the Dockerfile
-   ```
-   RUN R -e install.packages('BiocManager'); BiocManagerinstall(c('Seurat', 'SingleCellExperiment', 'scater', 'scran'))
-   ```
-
-2. Modify the `app.R` file to include your analysis pipeline
-3. Add example datasets in the `data` directory
 
 ## Repository Structure
 
 ```
-scRNA-shiny-app
+GUIdedRNA
 ├── README.md          # This file
 ├── Dockerfile         # Docker configuration
 ├── run.sh             # Script to build and run on LinuxMac
