@@ -6,6 +6,10 @@
 \usage{
 preprocess_DoubletRemoval(seurat_list)
 }
+\arguments{
+\item{seurat_list}{List of Seurat objects}
+}
 \description{
-Fully runs the doublet removal protocol through DoubletFinder() based on variable from Assign_ExpectedDoublet_variable(), Returns Seurat object with TRUE/FALSE assignment to duplicate cells in META data. Finally, returns reactive object and associated figures in output folder.
+Fully runs the doublet removal protocol through DoubletFinder() based on variable from assign_ExpectedDoublet().
+Returns Seurat object with TRUE/FALSE assignment to duplicate cells in META data.
 }

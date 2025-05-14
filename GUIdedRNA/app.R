@@ -10,17 +10,35 @@ library(ggplot2)
 library(DT)
 library(Matrix)
 library(dplyr)
-
+library(DoubletFinder)
+library(decontX)
 #library(GUIdedRNA)
 
+source("~/GUIdedRNA/GUIdedRNA/global.R")
+source("~/GUIdedRNA/R/preprocessing_functions.R")
 
 options(shiny.maxRequestSize = 100 * 1024^3)
 
-# Define UI
+# Global message queue 
+message_queue <- character(0)
+
+# Global message handling functions
+send_message <- function(msg) {
+  # Add to queue
+  message_queue <<- c(message_queue, msg)
+  # Also log to console
+  message(paste("Message queued:", msg))
+}
+
+get_messages <- function() {
+  msgs <- message_queue
+  message_queue <<- character(0)
+  return(msgs)
+}
+
 ui <- dashboardPage(
-  
-  skin = c("black"),
-  dashboardHeader(title = "GUIdedRNA - scRNA analysis interface"),
+  skin = "black",
+  dashboardHeader(title = "GUIdedRNA"),
   
   # Sidebar with analysis steps
   dashboardSidebar(
@@ -40,32 +58,26 @@ ui <- dashboardPage(
   
   # Main panel with tabbed content
   dashboardBody(
-    shinyjs::useShinyjs(),
+    useShinyjs(),
+    extendShinyjs(
+      text = "shinyjs.appendToConsole = function(message) {
+    var consoleOutput = document.getElementById('consoleOutput');
+    if(consoleOutput) {
+      var p = document.createElement('p');
+      p.innerHTML = message;
+      p.style.fontSize = '0.75em';  // This makes the font smaller
+      p.style.margin = '0';         // Remove default paragraph margin for compact display
+      p.style.padding = '2px 0';    // Add a little vertical padding between lines
+      consoleOutput.appendChild(p);
+      consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    }
+  }",
+      functions = c("appendToConsole")
+    ),
     
     tabItems(
       # Upload Data tab
       tabItem(tabName = "upload",
-              fluidRow(
-                box(
-                  title = "Upload 10X Genomics files",
-                  width = 12,
-                  fileInput("matrixFile", "Matrix (.mtx)"),
-                  fileInput("featuresFile", "Features/Genes (.tsv/.txt)"),
-                  fileInput("barcodesFile", "Barcodes (.tsv/.txt)"),
-                  actionButton("loadData_file", "Load Data")
-                ),
-              ),
-              
-              fluidRow(
-                box(
-                  title = "Upload Folder or list of Folders",
-                  width = 12,
-                  shinyDirButton("folderBtn_single", "Select Directory", "Choose a directory with 10X data"),
-                  helpText("Select directory containing files, or directory containing dataset folders"),
-                  textOutput("selectedFolder"),
-                  actionButton("loadData_folder", "Load Data")
-                ),
-              ),
               
               fluidRow(
                 box(
@@ -78,6 +90,27 @@ ui <- dashboardPage(
                 ),
               ),
               
+              fluidRow(
+                box(
+                  title = "Upload Folder or list of Folders for multiple 10X Genomic datasets",
+                  width = 12,
+                  shinyDirButton("folderBtn_single", "Select Directory", "Choose a directory with 10X data"),
+                  helpText("Select directory containing files, or directory containing dataset folders"),
+                  textOutput("selectedFolder"),
+                  actionButton("loadData_folder", "Load Data")
+                ),
+              ),
+              
+              fluidRow(
+                box(
+                  title = "Upload 10X Genomics files for Single Dataset",
+                  width = 12,
+                  fileInput("matrixFile", "Matrix (.mtx)"),
+                  fileInput("featuresFile", "Features/Genes (.tsv/.txt)"),
+                  fileInput("barcodesFile", "Barcodes (.tsv/.txt)"),
+                  actionButton("loadData_file", "Load Data")
+                ),
+              ),
               
               fluidRow(
                 box(
@@ -148,10 +181,12 @@ ui <- dashboardPage(
                 box(
                   title = "Preprocessing Results",
                   width = 8,
-                  plotOutput("preprocessingPlot") %>% withSpinner()
+                  # Add these style attributes for text alignment
+                  div(id = "consoleOutput", 
+                      style = "white-space: pre-wrap; height: 600px; overflow-y: auto; background-color: #f5f5f5; padding: 1px; font-family: monospace; text-align: left; vertical-align: top;")
                 )
               )
-      ),
+            ),
       
       # Normalization tab
       tabItem(tabName = "normalize",
@@ -313,9 +348,46 @@ ui <- dashboardPage(
   )
 )
 
-# Define server logic
+
+#Defining server logic
 server <- function(input, output, session) {
-  # Reactive values to store data and analysis state
+
+  # Initialize log text reactive value
+  log_text <- reactiveVal("")
+  
+  
+  display_ui_message <- function(msg) {
+    # Function to display messages in the UI console
+    # Update the log text
+    current <- isolate(log_text())
+    log_text(paste0(current, msg, "\n"))
+    
+    # Send to JavaScript console
+    js$appendToConsole(msg)
+  }
+  
+  # Create an observer that checks for new messages
+  observe({
+    msgs <- get_messages()
+    if (length(msgs) > 0) {
+      # Process all queued messages
+      for (msg in msgs) {
+        display_ui_message(msg)
+      }
+    }
+    invalidateLater(100) 
+  })
+  
+  
+  assign("send_message", function(msg) {
+    display_ui_message(msg)
+  }, envir = .GlobalEnv)
+  
+  # Render log text
+  output$preprocessingLog <- renderText({
+    log_text()
+  })
+  
   values <- reactiveValues(
     seurat = NULL,
     original_seurat = NULL,
@@ -329,7 +401,7 @@ server <- function(input, output, session) {
     markers_done = FALSE,
     annotation_done = FALSE
   )
-
+  
   # Define volumes in a platform-agnostic way
   volumes <- c()
   
@@ -370,31 +442,44 @@ server <- function(input, output, session) {
     }
   }
   
-  # Initialize directory chooser
+  # Initialize directory chooser for input
   shinyDirChoose(input, "folderBtn_single", roots = volumes, session = session)
   
   # Display selected input folder
   output$selectedFolder <- renderText({
     if (!is.null(input$folderBtn_single)) {
       parseDirPath(volumes, input$folderBtn_single)
+      showNotification(paste("Input folder set to:", input$folderBtn_single), type = "message")
     } else {
       "No folder selected"
     }
   })
   
-  # Initialize directory chooser
+  # Initialize directory chooser for output
   shinyDirChoose(input, "folderBtn_output", roots = volumes, session = session)
   
-  # Display selected output folder
   output$outputFolder <- renderText({
-    if (!is.null(input$folderBtn_output)) {
-      parseDirPath(volumes, input$folderBtn_output)
+    if (!is.null(output_directory())) {
+      output_directory()
     } else {
       "No folder selected"
     }
   })
   
-    
+  # Display selected output folder
+  output_directory <- reactive({
+    req(input$folderBtn_output)
+    parseDirPath(volumes, input$folderBtn_output)
+  })
+  
+  observeEvent(input$outputData_folder, {
+    req(output_directory())
+    output_folder <<- output_directory()
+    showNotification(paste("Output folder set to:", output_folder), type = "message")
+  })
+  
+  
+  
   # Data loading logic single dataset
   observeEvent(input$loadData_file, {
     req(input$matrixFile, input$featuresFile, input$barcodesFile)
@@ -425,8 +510,8 @@ server <- function(input, output, session) {
       seurat_obj[["percent.mt"]] <- Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
       
       # Store in reactive values
-      values$seurat <- seurat_obj
-      values$original_seurat <- seurat_obj
+      values$seurat_list <- seurat_obj
+      values$original_seurat_list <- seurat_obj
     })
     
     # Show data summary
@@ -640,42 +725,75 @@ server <- function(input, output, session) {
 
   # Quality Control logic
   output$qcPlot <- renderPlot({
-    req(values$seurat)
-    VlnPlot(values$seurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
-  })
+    req(values$seurat_list)
   
+    # Combine meta.data across all Seurat objects with dataset label
+    meta_combined <- do.call(rbind, lapply(names(values$seurat_list), function(name) {
+      obj <- values$seurat_list[[name]]
+      meta <- obj@meta.data
+      meta$dataset <- name
+      return(meta)
+    }))
+    
+    # Plot using ggplot2
+    features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")
+    plots <- lapply(features, function(feat) {
+      ggplot(meta_combined, aes_string(x = "dataset", y = feat, fill = "dataset")) +
+        geom_violin(trim = FALSE) +
+        theme_minimal() +
+        theme(legend.position = "none") +
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+        ggtitle(feat)
+    })
+    
+    # Display in a grid
+    cowplot::plot_grid(plotlist = plots, ncol = 3)
+  })
+    
+    
   observeEvent(input$runQC, {
-    req(values$seurat)
+    req(values$seurat_list)
     
     withProgress(message = 'Running QC filtering...', {
-      # Apply QC filtering
-      filtered_seurat <- subset(values$seurat, 
-                                nFeature_RNA > input$minFeatures & 
-                                  nFeature_RNA < input$maxFeatures & 
-                                  nCount_RNA > input$minCount &
-                                  nCount_RNA < input$maxCount &
-                                  percent.mt < input$maxMito)
+      # Filter each object individually
+      filtered_list <- lapply(values$seurat_list, function(seurat_obj) {
+        subset(seurat_obj,
+               nFeature_RNA > input$minFeatures &
+                 nFeature_RNA < input$maxFeatures &
+                 nCount_RNA > input$minCount &
+                 nCount_RNA < input$maxCount &
+                 percent.mt < input$maxMito)
+      })
       
-      # Update Seurat object
-      values$seurat <- filtered_seurat
+      values$seurat_list <- filtered_list
       values$qc_done <- TRUE
     })
     
-    # Show QC summary
+    # QC Summary
     output$qcSummary <- renderPrint({
-      req(values$seurat)
+      req(values$seurat_list, values$original_seurat_list)
       cat("QC filtering completed.\n")
-      cat(paste("Cells before filtering:", ncol(values$original_seurat), "\n"))
-      cat(paste("Cells after filtering:", ncol(values$seurat), "\n"))
-      cat(paste("Cells removed:", ncol(values$original_seurat) - ncol(values$seurat), "\n"))
+      
+      for (name in names(values$original_seurat_list)) {
+        orig_cells <- ncol(values$original_seurat_list[[name]])
+        filtered_cells <- ncol(values$seurat_list[[name]])
+        cat(paste0("Dataset: ", name, "\n"))
+        cat(paste("  Cells before filtering:", orig_cells, "\n"))
+        cat(paste("  Cells after filtering:", filtered_cells, "\n"))
+        cat(paste("  Cells removed:", orig_cells - filtered_cells, "\n\n"))
+      }
     })
     
-    # Navigate to next tab
     updateTabItems(session, "tabs", "preprocess")
   })
-  
+ 
   # Preprocessing logic triggered by commit button
   observeEvent(input$commitPreprocessing, {
+    req(values$seurat_list)
+    
+    # Reset the log text
+    log_text("")
+    
     # Check which methods are selected
     selected_methods <- input$preprocessMethods
     
@@ -686,78 +804,61 @@ server <- function(input, output, session) {
       return()
     }
     
-    # Run preprocessing based on selected methods
-    preprocessing_results <- list()
+    # Send initial message
+    send_message("Starting preprocessing...")
+    
+    # Get the current Seurat list
+    preprocessing_seurat_list <- values$seurat_list
     
     # Progress indication
-    withProgress(message = 'Processing...', value = 0.1, {
+    withProgress(message = 'Processing...', value = 0, {
       if ("doublet" %in% selected_methods) {
-        # Perform doublet removal
-        incProgress(0.3)
-        preprocessing_results$doublet <- tryCatch({
-          perform_doublet_removal()
+        incProgress(0.1, detail = "Running Doublet Removal...")
+        
+        send_message("Starting Doublet Removal, this may take some time...")
+        
+        preprocessing_seurat_list <- tryCatch({
+          preprocess_DoubletRemoval(preprocessing_seurat_list)
         }, error = function(e) {
-          showNotification(paste("Error in Doublet Removal:", e$message), 
-                           type = "error")
-          NULL
+          send_message(paste("Error in Doublet Removal:", e$message))
+          return(preprocessing_seurat_list)
         })
+        
+        incProgress(0.5)
       }
       
       if ("ambient" %in% selected_methods) {
-        # Perform other preprocessing method
-        incProgress(0.6)
-        preprocessing_results$otherMethod <- tryCatch({
-          perform_other_method()
+        incProgress(0.1, detail = "Running Ambient RNA Removal...")
+        
+        send_message("Starting Ambient RNA Removal...")
+        
+        preprocessing_seurat_list <- tryCatch({
+          preprocess_AmbientRNA(preprocessing_seurat_list)
         }, error = function(e) {
-          showNotification(paste("Error in Other Method:", e$message), 
-                           type = "error")
-          NULL
+          send_message(paste("Error in Ambient RNA Removal:", e$message))
+          return(preprocessing_seurat_list)
         })
+        
+        send_message("Filtering low RNA cells...")
+        
+        preprocessing_seurat_list <- tryCatch({
+          remove_lowRNA(preprocessing_seurat_list)
+        }, error = function(e) {
+          send_message(paste("Error in Low RNA Filtering:", e$message))
+          return(preprocessing_seurat_list)
+        })
+        
+        incProgress(0.4)
       }
       
-      # Update the plot or results
-      output$preprocessingPlot <- renderPlot({
-        # This will depend on your specific preprocessing methods
-        if (length(preprocessing_results) > 0) {
-          # Example plot logic - adjust according to your needs
-          # You might want to create different plots based on selected methods
-          par(mfrow = c(1, length(preprocessing_results)))
-          for (method in names(preprocessing_results)) {
-            # Placeholder - replace with actual plotting logic
-            plot(preprocessing_results[[method]], 
-                 main = paste("Results:", method))
-          }
-        }
-      })
-    })
-  })
-
-  # Normalization logic
-  observeEvent(input$runNorm, {
-    req(values$seurat, values$qc_done)
-    
-    withProgress(message = 'Running normalization...', {
-      if(input$normMethod == "LogNormalize") {
-        values$seurat <- NormalizeData(values$seurat, 
-                                       normalization.method = "LogNormalize", 
-                                       scale.factor = input$scaleFactor)
-      } else if(input$normMethod == "SCTransform") {
-        values$seurat <- SCTransform(values$seurat)
-      }
-      
-      values$norm_done <- TRUE
-    })
-    
-    # Plot distribution of normalized data
-    output$normPlot <- renderPlot({
-      req(values$seurat, values$norm_done)
-      # Sample a few genes to show normalized expression distribution
-      genes_to_plot <- sample(rownames(values$seurat), 4)
-      VlnPlot(values$seurat, features = genes_to_plot, ncol = 2)
+      # Update reactive values
+      values$seurat_list <- preprocessing_seurat_list
+      values$preprocess_done <- TRUE
+      send_message("Preprocessing completed successfully!")
     })
     
     # Navigate to next tab
-    updateTabItems(session, "tabs", "features")
+    updateTabItems(session, "tabs", "normalize")
   })
   
   # Feature selection logic

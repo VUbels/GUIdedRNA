@@ -7,6 +7,6 @@
 assign_ExpectedDoublet(val)
 }
 \description{
-Function returns the expected doublet rate based on 10X data dependent on cell count rather than flat rate. Increasing cell count in smaller samples.
-Assign_ExpectedDoublet_variable()
+Function returns the expected doublet rate based on 10X data dependent on cell count rather than flat rate.
+Increasing cell count in smaller samples.
 }

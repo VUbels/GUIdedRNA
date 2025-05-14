@@ -2,10 +2,13 @@
 % Please edit documentation in R/preprocessing_functions.R
 \name{preprocess_AmbientRNA}
 \alias{preprocess_AmbientRNA}
-\title{Ambient RNA approximation on Seurat object}
+\title{Removes ambient RNA from cells using DecontX pipeline}
 \usage{
-preprocess_AmbientRNA(seurat_obj, seed = 1)
+preprocess_AmbientRNA(seurat_list)
+}
+\arguments{
+\item{seurat_list}{List of Seurat objects}
 }
 \description{
-Fully runs the ambient RNA approximation protocol through DecontX.
+Removes ambient RNA from cells using DecontX pipeline
 }
