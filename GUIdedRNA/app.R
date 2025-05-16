@@ -45,10 +45,9 @@ ui <- dashboardPage(
     sidebarMenu(
       id = "tabs",
       menuItem("Setup", tabName = "upload", icon = icon("upload"), selected = TRUE),
+      menuItem("Sample Information", tabName = "information", icon = icon("list")),
       menuItem("Quality Control", tabName = "qc", icon = icon("check-circle")),
       menuItem("Preprocessing", tabName = "preprocess", icon = icon("filter")),
-      menuItem("Normalization", tabName = "normalize", icon = icon("chart-line")),
-      menuItem("Feature Selection", tabName = "features", icon = icon("list")),
       menuItem("Dimensionality Reduction", tabName = "dimreduce", icon = icon("project-diagram")),
       menuItem("Clustering", tabName = "cluster", icon = icon("object-group")),
       menuItem("Cell Type Annotation", tabName = "annotate", icon = icon("tags")),
@@ -121,6 +120,61 @@ ui <- dashboardPage(
               )
       ),
       
+      # Setting sample information
+      tabItem(tabName = "information",
+              fluidRow(
+                box(
+                  title = "Sample Information Manager",
+                  width = 12,
+                  status = "primary",
+                  solidHeader = TRUE,
+                  
+                  fluidRow(
+                    # Column 1: Display original identities from all objects
+                    column(
+                      width = 4,
+                      div(
+                        class = "panel panel-default",
+                        div(class = "panel-heading", h4("Original Sample IDs")),
+                        div(
+                          class = "panel-body", 
+                          style = "max-height: 400px; overflow-y: auto;",
+                          uiOutput("originalIdentities")
+                        )
+                      )
+                    ),
+                    
+                    # Column 2: Add new sample attributes
+                    column(
+                      width = 8,
+                      div(
+                        class = "panel panel-default",
+                        div(class = "panel-heading", h4("Create New Sample Attributes")),
+                        div(
+                          class = "panel-body",
+                          
+                          # Input for new column name
+                          textInput("newColumnName", "New Column Name", value = "sample_type"),
+                          
+                          # Dynamic UI for assigning values to samples
+                          uiOutput("sampleValuesInput"),
+                          
+                          # Button to create the new column
+                          actionButton("createNewColumn", "Create New Column", 
+                                       class = "btn-success", style = "margin-top: 15px;"),
+                          
+                          # Display added columns
+                          tags$hr(),
+                          h4("Added Columns"),
+                          uiOutput("addedColumnsUI")
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+      ),
+      
       # Quality Control tab
       tabItem(tabName = "qc",
               fluidRow(
@@ -188,28 +242,7 @@ ui <- dashboardPage(
               )
             ),
       
-      # Normalization tab
-      tabItem(tabName = "normalize",
-              fluidRow(
-                box(
-                  title = "Normalization Method",
-                  width = 4,
-                  selectInput("normMethod", "Method", 
-                              choices = c("LogNormalize", "SCTransform"), 
-                              selected = "LogNormalize"),
-                  conditionalPanel(
-                    condition = "input.normMethod == 'LogNormalize'",
-                    numericInput("scaleFactor", "Scale Factor", value = 10000)
-                  ),
-                  actionButton("runNorm", "Run Normalization")
-                ),
-                box(
-                  title = "Normalization Results",
-                  width = 8,
-                  plotOutput("normPlot") %>% withSpinner()
-                )
-              )
-      ),
+      
       
       # Feature Selection tab
       tabItem(tabName = "features",
@@ -720,9 +753,245 @@ server <- function(input, output, session) {
     })
     
     # Navigate to QC tab
-    updateTabItems(session, "tabs", "qc")
+    updateTabItems(session, "tabs", "information")
   })
-
+  
+  # Logic to assign sample information to file list
+  output$originalIdentities <- renderUI({
+    req(values$seurat)
+    
+    sample_ids <- levels(values$seurat$orig.ident)
+    
+    tagList(
+      tags$div(
+        class = "sample-list",
+        lapply(sample_ids, function(id) {
+          tags$div(
+            class = "sample-id-item",
+            style = "padding: 8px; border-bottom: 1px solid #eee;",
+            tags$span(class = "label label-default", style = "margin-right: 10px;", id),
+            id
+          )
+        })
+      )
+    )
+  })
+  
+  getAllSampleIDs <- function() {
+    req(values$seurat_list)
+    
+    # Collect all unique orig.ident values from all Seurat objects
+    all_ids <- c()
+    for (seurat_obj in values$seurat_list) {
+      sample_ids <- levels(seurat_obj$orig.ident)
+      all_ids <- c(all_ids, sample_ids)
+    }
+    
+    # Return unique IDs
+    return(unique(all_ids))
+  }
+  
+  output$originalIdentities <- renderUI({
+    req(values$seurat_list)
+    
+    sample_ids <- getAllSampleIDs()
+    
+    tagList(
+      tags$div(
+        class = "sample-list",
+        lapply(sample_ids, function(id) {
+          # Count how many Seurat objects contain this sample ID
+          count <- sum(sapply(values$seurat_list, function(seurat_obj) {
+            id %in% levels(seurat_obj$orig.ident)
+          }))
+          
+          tags$div(
+            class = "sample-id-item",
+            style = "padding: 8px; border-bottom: 1px solid #eee;",
+            tags$span(class = "label label-default", style = "margin-right: 10px;", id),
+            span(id),
+            tags$span(
+              class = "pull-right",
+              style = "color: #888; font-size: 0.9em;",
+              paste0("(in ", count, " object", ifelse(count > 1, "s", ""), ")")
+            )
+          )
+        })
+      )
+    )
+  })
+  
+  # Create input fields for assigning values to each sample
+  output$sampleValuesInput <- renderUI({
+    req(values$seurat_list)
+    
+    sample_ids <- getAllSampleIDs()
+    
+    tagList(
+      tags$div(
+        style = "max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin-top: 10px;",
+        lapply(sample_ids, function(id) {
+          fluidRow(
+            column(4, 
+                   tags$label(class = "control-label", `for` = paste0("value_", id), id)
+            ),
+            column(8, 
+                   textInput(
+                     inputId = paste0("value_", id),
+                     label = NULL,
+                     value = "",
+                     placeholder = paste("Value for", id)
+                   )
+            )
+          )
+        })
+      )
+    )
+  })
+  
+  # Logic to create a new column
+  observeEvent(input$createNewColumn, {
+    req(values$seurat_list, input$newColumnName)
+    
+    # Validate the column name isn't empty
+    if (trimws(input$newColumnName) == "") {
+      showNotification("Column name cannot be empty", type = "error")
+      return()
+    }
+    
+    # Check if column already exists in any Seurat object
+    column_exists <- FALSE
+    for (seurat_obj in values$seurat_list) {
+      if (input$newColumnName %in% colnames(seurat_obj@meta.data)) {
+        column_exists <- TRUE
+        break
+      }
+    }
+    
+    if (column_exists) {
+      showModal(modalDialog(
+        title = "Column already exists",
+        "This column already exists in one or more Seurat objects. Do you want to overwrite it?",
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton("confirmOverwrite", "Overwrite")
+        )
+      ))
+      return()
+    }
+    
+    # Create the column
+    createColumn()
+  })
+  
+  # Handle overwrite confirmation
+  observeEvent(input$confirmOverwrite, {
+    removeModal()
+    createColumn()
+  })
+  
+  # Function to create/update column in all Seurat objects
+  createColumn <- function() {
+    withProgress(message = 'Creating new column in all Seurat objects...', {
+      # Get all sample IDs
+      sample_ids <- getAllSampleIDs()
+      
+      # Get user-defined values for each sample
+      values_map <- sapply(sample_ids, function(id) {
+        input[[paste0("value_", id)]]
+      })
+      names(values_map) <- sample_ids
+      
+      # Update each Seurat object in the list
+      for (i in seq_along(values$seurat_list)) {
+        incProgress(1/length(values$seurat_list), 
+                    detail = paste("Processing object", i, "of", length(values$seurat_list)))
+        
+        # Get sample IDs for this specific Seurat object
+        obj_sample_ids <- levels(values$seurat_list[[i]]$orig.ident)
+        
+        # Filter values map for just this object's samples
+        obj_values <- values_map[obj_sample_ids]
+        
+        # Create new metadata column for this object
+        new_values <- plyr::mapvalues(values$seurat_list[[i]]$orig.ident, 
+                                      from = obj_sample_ids, 
+                                      to = obj_values)
+        
+        # Add or update the column in this object's metadata
+        values$seurat_list[[i]][[input$newColumnName]] <- new_values
+      }
+      
+      # Track added columns if not already doing so
+      if(is.null(values$added_columns)) {
+        values$added_columns <- c(input$newColumnName)
+      } else {
+        # Only add if it's not already in the list
+        if(!(input$newColumnName %in% values$added_columns)) {
+          values$added_columns <- c(values$added_columns, input$newColumnName)
+        }
+      }
+      
+      # Reset the column name input
+      updateTextInput(session, "newColumnName", value = "")
+      
+      # Show success message
+      showNotification(paste("Column", input$newColumnName, "created successfully in all Seurat objects!"), type = "message")
+    })
+  }
+  
+  # Display added columns
+  output$originalIdentities <- renderUI({
+    req(values$seurat_list)
+    
+    sample_ids <- getAllSampleIDs()
+    
+    tagList(
+      tags$div(
+        class = "sample-list",
+        lapply(sample_ids, function(id) {
+          tags$div(
+            class = "sample-id-item",
+            style = "padding: 8px; border-bottom: 1px solid #eee;",
+            span(id)
+          )
+        })
+      )
+    )
+  })
+  
+  # Handle edit button clicks for each column
+  observe({
+    req(values$added_columns, values$seurat_list)
+    
+    lapply(values$added_columns, function(col_name) {
+      observeEvent(input[[paste0("editColumn_", col_name)]], {
+        # Set the column name in the input
+        updateTextInput(session, "newColumnName", value = col_name)
+        
+        # Get all unique sample IDs
+        sample_ids <- getAllSampleIDs()
+        
+        # For each sample ID, find its value in the first Seurat object where it exists
+        for(id in sample_ids) {
+          # Find the first Seurat object that contains this sample ID
+          for(seurat_obj in values$seurat_list) {
+            if(id %in% levels(seurat_obj$orig.ident)) {
+              # Get the current value for this sample
+              current_value <- seurat_obj@meta.data[seurat_obj$orig.ident == id, col_name][1]
+              
+              # Update the text input
+              updateTextInput(session, paste0("value_", id), value = current_value)
+              
+              # Move to the next sample ID
+              break
+            }
+          }
+        }
+      })
+    })
+  })
+  
   # Quality Control logic
   output$qcPlot <- renderPlot({
     req(values$seurat_list)
@@ -853,45 +1122,23 @@ server <- function(input, output, session) {
       
       # Update reactive values
       values$seurat_list <- preprocessing_seurat_list
+      merged_seurat <- merge(x=seurat_list[[1]], y=seurat_list[2:length(seurat_list)])
+      merged_seurat$orig.ident <- as.factor(merged_seurat$orig.ident)
+      values$seurat <- merged_seurat
       values$preprocess_done <- TRUE
-      send_message("Preprocessing completed successfully!")
+      send_message("Preprocessing and merging completed successfully!")
     })
     
     # Navigate to next tab
-    updateTabItems(session, "tabs", "normalize")
+    updateTabItems(session, "tabs", "information")
   })
+
   
-  # Feature selection logic
-  observeEvent(input$findVarFeatures, {
-    req(values$seurat, values$norm_done)
-    
-    withProgress(message = 'Finding variable features...', {
-      values$seurat <- FindVariableFeatures(values$seurat, 
-                                            selection.method = "vst", 
-                                            nfeatures = input$nFeatures)
-      
-      values$features_done <- TRUE
-    })
-    
-    # Plot variable features
-    output$varFeaturesPlot <- renderPlot({
-      req(values$seurat, values$features_done)
-      VariableFeaturePlot(values$seurat)
-    })
-    
-    # Show top variable features
-    output$topFeaturesTable <- renderDT({
-      req(values$seurat, values$features_done)
-      top_features <- head(VariableFeatures(values$seurat), 20)
-      data.frame(
-        Feature = top_features,
-        Mean = rowMeans(values$seurat@assays$RNA@data[top_features, ])
-      )
-    })
-    
-    # Navigate to next tab
-    updateTabItems(session, "tabs", "dimreduce")
-  })
+  
+  
+  
+  
+  
   
   # Dimensionality reduction logic
   observeEvent(input$runPCA, {
