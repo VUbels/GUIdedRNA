@@ -48,7 +48,7 @@ ui <- dashboardPage(
       menuItem("Sample Information", tabName = "information", icon = icon("list")),
       menuItem("Quality Control", tabName = "qc", icon = icon("check-circle")),
       menuItem("Preprocessing", tabName = "preprocess", icon = icon("filter")),
-      menuItem("Dimensionality Reduction", tabName = "dimreduce", icon = icon("project-diagram")),
+      menuItem("LSI Round 1", tabName = "LSI_1", icon = icon("project-diagram")),
       menuItem("Clustering", tabName = "cluster", icon = icon("object-group")),
       menuItem("Cell Type Annotation", tabName = "annotate", icon = icon("tags")),
       menuItem("Download Results", tabName = "download", icon = icon("download"))
@@ -126,7 +126,6 @@ ui <- dashboardPage(
                 box(
                   title = "Sample Information Manager",
                   width = 12,
-                  status = "primary",
                   solidHeader = TRUE,
                   
                   fluidRow(
@@ -242,28 +241,31 @@ ui <- dashboardPage(
               )
             ),
       
-      
-      
-      # Feature Selection tab
-      tabItem(tabName = "features",
+      tabItem(tabName = "LSI_1",
               fluidRow(
                 box(
-                  title = "Variable Features Parameters",
+                  title = "LSI Round 1",
                   width = 4,
-                  numericInput("nFeatures", "Number of Features", value = 2000),
-                  actionButton("findVarFeatures", "Find Variable Features")
+                  checkboxGroupInput("blacklist_genes", "Ignore Mitochondrial, X/Y, Ribosomal genes from variable genes", 
+                                     choices = c("Ignore Mitochondrial Genes" = "blacklist_mitogenes", 
+                                                 "Ignore X/Y chomosomal genes" = "blacklist_sexgenes",
+                                                 "Ignore Ribosomal genes" = "blacklist_rbgenes"),
+                                     
+                                     
+                                     
+                                     selected = c("blacklist_mitogenes", "blacklist_sexgenes", "blacklist_rbgenes")
+                                     
+                  ),
+                  actionButton("commitLSI_1", "Run LSI with selected Methods", 
+                               class = "btn-success", 
+                               style = "width: 100%;")
                 ),
                 box(
-                  title = "Variable Features Plot",
+                  title = "LSI Results",
                   width = 8,
-                  plotOutput("varFeaturesPlot") %>% withSpinner()
-                )
-              ),
-              fluidRow(
-                box(
-                  title = "Top Variable Features",
-                  width = 12,
-                  DTOutput("topFeaturesTable")
+                  # Add these style attributes for text alignment
+                  div(id = "consoleOutput", 
+                      style = "white-space: pre-wrap; height: 600px; overflow-y: auto; background-color: #f5f5f5; padding: 1px; font-family: monospace; text-align: left; vertical-align: top;")
                 )
               )
       ),
@@ -627,8 +629,15 @@ server <- function(input, output, session) {
             # Create Seurat object
             seurat_obj <- Seurat::CreateSeuratObject(counts = counts, project = base)
             
-            # Calculate percent mitochondrial
-            seurat_obj[["percent.mt"]] <- Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+            # Calculate percent mitochondrial either in human or other data (murine/rat)
+            seurat_obj[["percent.mt"]] <- if(any(grepl("^MT-", rownames(seurat_obj)))) {
+              Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+            } else if(any(grepl("^mt-", rownames(seurat_obj)))) {
+              Seurat::PercentageFeatureSet(seurat_obj, pattern = "^mt-")
+            } else {
+              # If neither pattern exists, create a zero vector as fallback
+              rep(0, ncol(seurat_obj))
+            }
             
             # Add to list
             seurat_list[[base]] <- seurat_obj
@@ -1135,9 +1144,80 @@ server <- function(input, output, session) {
 
   
   
+  observeEvent(input$commitLSI_1, {
+    req(values$seurat)
+    
+    # Reset the log text
+    log_text("")
+    
+    # Check which methods are selected
+    selected_methods <- input$preprocessMethods
+    
+    # If no methods are selected, show a notification and return
+    if (length(selected_methods) == 0) {
+      showNotification("Running without ignoring mitotic cycle genes, X/Y chromosome genes and mitochondrial genes", 
+                       type = "warning")
+    }
+    
+    
+    # Send initial message
+    send_message("Starting log normalization...")
+    
+    
+    LSI1_seurat <- values$seurat
+    rawCounts <- GetAssayData(object=seurat, layer="counts")
+    log2CP10k <- sparseLogX(rawCounts, logtype="log2", scale=TRUE, scaleFactor=10^4)
+    LSI_seurat <- SetAssayData(object=LSI_seurat, layer="data", new.data=log2CP10k)
+    
+    umapNeighbors <- 50
+    umapMinDist <- 0.5
+    umapDistMetric <- "cosine"
+    
   
-  
-  
+    message("Running iterative LSI...")
+    set.seed(1)
+    
+    #Initial Cluster allocation
+    
+    for(i in seq_along(resolution)){
+      # If first round, compute variable genes on raw data first
+      if(i == 1){
+        message(sprintf("Identifying top %s variable genes among all cells...", nVarGenes))
+        varGenes <- getVarGenes(log2CP10k, nvar=nVarGenes, blacklist=blacklist.genes)
+      }else{
+        # For remaining rounds, calculate variable genes using previous clusters
+        clusterMat <- edgeR::cpm(groupSums(rawCounts, clusters, sparse=TRUE), log=TRUE, prior.count=3)
+        message(sprintf("Identifying top %s variable genes from round %s LSI...", nVarGenes, i-1))
+        varGenes <- getVarGenes(clusterMat, nvar=nVarGenes, blacklist=blacklist.genes)
+      }
+      # Now run LSI and find clusters
+      LSIi <- runLSI(rawCounts[varGenes,], nComponents = max(nPCs), binarize = FALSE)
+      
+        message(sprintf("Harmonizing LSI SVD PCs for round %s...", i))
+        harmonized_pcs <- HarmonyMatrix(
+          data_mat  = LSIi$matSVD,
+          meta_data = seurat_obj_merged@meta.data,
+          vars_use  = covariates, # Covariates to 'harmonize'
+          do_pca    = FALSE
+        )
+        LSIi$matSVD <- harmonized_pcs
+      }
+      
+      reducName <- paste0("LSI_iter",i)
+      seurat_obj_merged[[reducName]] <- CreateDimReducObject(embeddings = LSIi$matSVD, key = sprintf("LSI%s_", i), assay = "RNA")
+      seurat_obj_merged <- FindNeighbors(object = seurat_obj_merged, reduction = reducName, dims = nPCs, force.recalc = TRUE)
+      message(sprintf("Clustering with resolution %s...", resolution[i]))
+      seurat_obj_merged <- FindClusters(object = seurat_obj_merged, resolution = resolution[i], algorithm = 4, method = "igraph")
+      clusters <- Idents(seurat_obj_merged)
+      #Store information
+      lsiOut[[reducName]] <- list(
+        lsiMat = LSIi$matSVD,
+        svd = LSIi$svd,
+        varFeatures = varGenes, 
+        clusters = clusters
+      )
+    }
+  )
   
   
   # Dimensionality reduction logic
@@ -1145,6 +1225,7 @@ server <- function(input, output, session) {
     req(values$seurat, values$features_done)
     
     withProgress(message = 'Running PCA...', {
+      values$seurat <- 
       values$seurat <- ScaleData(values$seurat, features = VariableFeatures(values$seurat))
       values$seurat <- RunPCA(values$seurat, features = VariableFeatures(values$seurat), npcs = input$nPCs)
       
