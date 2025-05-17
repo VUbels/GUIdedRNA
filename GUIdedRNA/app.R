@@ -12,10 +12,14 @@ library(Matrix)
 library(dplyr)
 library(DoubletFinder)
 library(decontX)
+library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+library()
+
 #library(GUIdedRNA)
 
 source("~/GUIdedRNA/GUIdedRNA/global.R")
 source("~/GUIdedRNA/R/preprocessing_functions.R")
+source("~/GUIdedRNA/R/LSI_functions.R")
 
 options(shiny.maxRequestSize = 100 * 1024^3)
 
@@ -39,6 +43,7 @@ get_messages <- function() {
 ui <- dashboardPage(
   skin = "black",
   dashboardHeader(title = "GUIdedRNA"),
+  
   
   # Sidebar with analysis steps
   dashboardSidebar(
@@ -243,29 +248,62 @@ ui <- dashboardPage(
       
       tabItem(tabName = "LSI_1",
               fluidRow(
-                box(
-                  title = "LSI Round 1",
+                column(
                   width = 4,
-                  checkboxGroupInput("blacklist_genes", "Ignore Mitochondrial, X/Y, Ribosomal genes from variable genes", 
-                                     choices = c("Ignore Mitochondrial Genes" = "blacklist_mitogenes", 
-                                                 "Ignore X/Y chomosomal genes" = "blacklist_sexgenes",
-                                                 "Ignore Ribosomal genes" = "blacklist_rbgenes"),
-                                     
-                                     
-                                     
-                                     selected = c("blacklist_mitogenes", "blacklist_sexgenes", "blacklist_rbgenes")
-                                     
+                  box(
+                    title = "Blacklist Settings",
+                    width = NULL,
+                    status = "primary",
+                    solidHeader = TRUE,
+                    checkboxGroupInput("blacklist_genes", "Ignore genes from DE analysis (Recommended)", 
+                                       choices = c("Ignore Mitochondrial Genes" = "blacklist_mitogenes", 
+                                                   "Ignore X/Y chomosomal genes" = "blacklist_sexgenes",
+                                                   "Ignore Ribosomal genes" = "blacklist_rbgenes"),
+                                       selected = c("blacklist_mitogenes", "blacklist_sexgenes", "blacklist_rbgenes")
+                    )
                   ),
-                  actionButton("commitLSI_1", "Run LSI with selected Methods", 
-                               class = "btn-success", 
-                               style = "width: 100%;")
+                  
+                  box(
+                    title = "LSI Parameters",
+                    width = NULL,
+                    status = "primary",
+                    solidHeader = TRUE,
+                    
+                    numericInput("nVarGenes", "Number of Variable Genes", 
+                                 value = 2000, min = 100, max = 10000, step = 100),
+                    
+                    sliderInput("nPCs", "Number of Principal Components", 
+                                value = 30, min = 10, max = 100, step = 5),
+                    
+                    textInput("resolution", "Clustering Resolutions (comma separated)", 
+                              value = "0.2, 0.4, 0.8"),
+                    
+                    textInput("covariates", "Harmony Covariates (comma separated)", 
+                              value = "orig.ident"),
+                    
+                    # UMAP parameters
+                    numericInput("umapNeighbors", "UMAP Neighbors", 
+                                 value = 50, min = 5, max = 200, step = 5),
+                    
+                    numericInput("umapMinDist", "UMAP Minimum Distance", 
+                                 value = 0.5, min = 0.01, max = 0.99, step = 0.01),
+                    
+                    selectInput("umapDistMetric", "UMAP Distance Metric",
+                                choices = c("cosine", "euclidean", "manhattan", "hamming"),
+                                selected = "cosine"),
+                    
+                    actionButton("commitLSI_1", "Run LSI with Selected Parameters", 
+                                 class = "btn-success", 
+                                 style = "width: 100%;")
+                  )
                 ),
+                
                 box(
-                  title = "LSI Results",
+                  title = "LSI Round 1 Results",
                   width = 8,
                   # Add these style attributes for text alignment
                   div(id = "consoleOutput", 
-                      style = "white-space: pre-wrap; height: 600px; overflow-y: auto; background-color: #f5f5f5; padding: 1px; font-family: monospace; text-align: left; vertical-align: top;")
+                      style = "white-space: pre-wrap; height: 750px; overflow-y: auto; background-color: #f5f5f5; padding: 1px; font-family: monospace; text-align: left; vertical-align: top;")
                 )
               )
       ),
@@ -1131,7 +1169,7 @@ server <- function(input, output, session) {
       
       # Update reactive values
       values$seurat_list <- preprocessing_seurat_list
-      merged_seurat <- merge(x=seurat_list[[1]], y=seurat_list[2:length(seurat_list)])
+      merged_seurat <- merge(x=seurat_list$seurat_list[[1]], y=seurat_list$seurat_list[2:length(seurat_list$seurat_list)])
       merged_seurat$orig.ident <- as.factor(merged_seurat$orig.ident)
       values$seurat <- merged_seurat
       values$preprocess_done <- TRUE
@@ -1139,85 +1177,76 @@ server <- function(input, output, session) {
     })
     
     # Navigate to next tab
-    updateTabItems(session, "tabs", "information")
+    updateTabItems(session, "tabs", "LSI_1")
   })
 
-  
-  
   observeEvent(input$commitLSI_1, {
     req(values$seurat)
     
     # Reset the log text
     log_text("")
     
-    # Check which methods are selected
-    selected_methods <- input$preprocessMethods
+    # Get selected parameters
+    selected_blacklist <- input$blacklist_genes
+    nVarGenes <- input$nVarGenes
+    nPCs <- input$nPCs
+    resolution <- as.numeric(unlist(strsplit(gsub(" ", "", input$resolution), ",")))
+    covariates <- unlist(strsplit(gsub(" ", "", input$covariates), ","))
+    umapNeighbors <- input$umapNeighbors
+    umapMinDist <- input$umapMinDist
+    umapDistMetric <- input$umapDistMetric
     
-    # If no methods are selected, show a notification and return
-    if (length(selected_methods) == 0) {
-      showNotification("Running without ignoring mitotic cycle genes, X/Y chromosome genes and mitochondrial genes", 
-                       type = "warning")
-    }
+    # Initial message
+    send_message("Starting LSI preprocessing...")
     
-    
-    # Send initial message
-    send_message("Starting log normalization...")
-    
-    
+    # Get the Seurat object
     LSI1_seurat <- values$seurat
-    rawCounts <- GetAssayData(object=seurat, layer="counts")
-    log2CP10k <- sparseLogX(rawCounts, logtype="log2", scale=TRUE, scaleFactor=10^4)
-    LSI_seurat <- SetAssayData(object=LSI_seurat, layer="data", new.data=log2CP10k)
+    LSI1_seurat <- SeuratObject::JoinLayers(LSI1_seurat)
+    rawCounts <- SeuratObject::GetAssayData(object=LSI1_seurat, layer = "counts")
     
-    umapNeighbors <- 50
-    umapMinDist <- 0.5
-    umapDistMetric <- "cosine"
+    # Generate blacklist based on user selections
+    blacklist.genes <- generate_GeneBlacklist(rawCounts, selected_blacklist, send_message)
     
-  
-    message("Running iterative LSI...")
-    set.seed(1)
-    
-    #Initial Cluster allocation
-    
-    for(i in seq_along(resolution)){
-      # If first round, compute variable genes on raw data first
-      if(i == 1){
-        message(sprintf("Identifying top %s variable genes among all cells...", nVarGenes))
-        varGenes <- getVarGenes(log2CP10k, nvar=nVarGenes, blacklist=blacklist.genes)
-      }else{
-        # For remaining rounds, calculate variable genes using previous clusters
-        clusterMat <- edgeR::cpm(groupSums(rawCounts, clusters, sparse=TRUE), log=TRUE, prior.count=3)
-        message(sprintf("Identifying top %s variable genes from round %s LSI...", nVarGenes, i-1))
-        varGenes <- getVarGenes(clusterMat, nvar=nVarGenes, blacklist=blacklist.genes)
-      }
-      # Now run LSI and find clusters
-      LSIi <- runLSI(rawCounts[varGenes,], nComponents = max(nPCs), binarize = FALSE)
-      
-        message(sprintf("Harmonizing LSI SVD PCs for round %s...", i))
-        harmonized_pcs <- HarmonyMatrix(
-          data_mat  = LSIi$matSVD,
-          meta_data = seurat_obj_merged@meta.data,
-          vars_use  = covariates, # Covariates to 'harmonize'
-          do_pca    = FALSE
-        )
-        LSIi$matSVD <- harmonized_pcs
-      }
-      
-      reducName <- paste0("LSI_iter",i)
-      seurat_obj_merged[[reducName]] <- CreateDimReducObject(embeddings = LSIi$matSVD, key = sprintf("LSI%s_", i), assay = "RNA")
-      seurat_obj_merged <- FindNeighbors(object = seurat_obj_merged, reduction = reducName, dims = nPCs, force.recalc = TRUE)
-      message(sprintf("Clustering with resolution %s...", resolution[i]))
-      seurat_obj_merged <- FindClusters(object = seurat_obj_merged, resolution = resolution[i], algorithm = 4, method = "igraph")
-      clusters <- Idents(seurat_obj_merged)
-      #Store information
-      lsiOut[[reducName]] <- list(
-        lsiMat = LSIi$matSVD,
-        svd = LSIi$svd,
-        varFeatures = varGenes, 
-        clusters = clusters
-      )
+    # If no options selected, show a notification
+    if(length(selected_blacklist) == 0) {
+      showNotification("Running without ignoring any genes", type = "warning")
     }
-  )
+    
+    # Show selected parameters
+    send_message(sprintf("Using LSI parameters:"))
+    send_message(sprintf("  - Number of variable genes: %d", nVarGenes))
+    send_message(sprintf("  - Number of PCs: %d", nPCs))
+    send_message(sprintf("  - Resolutions: %s", paste(resolution, collapse = ", ")))
+    send_message(sprintf("  - Covariates for harmony: %s", paste(covariates, collapse = ", ")))
+    send_message(sprintf("  - UMAP parameters: neighbors=%d, min_dist=%.2f, metric=%s", 
+                         umapNeighbors, umapMinDist, umapDistMetric))
+    
+    # Run LSI
+    lsi_results <- process_LSI(
+      seurat_obj = LSI1_seurat,
+      blacklist.genes = blacklist.genes,
+      nVarGenes = nVarGenes,
+      resolution = resolution,
+      nPCs = nPCs,
+      covariates = covariates,
+      umapNeighbors = umapNeighbors,
+      umapMinDist = umapMinDist,
+      umapDistMetric = umapDistMetric,
+      send_message = send_message
+    )
+    
+    # Update values
+    values$seurat <- lsi_results$seurat_obj
+    values$lsiOut <- lsi_results$lsiOut
+    
+    send_message("LSI round 1 processing complete!")
+  
+    # Navigate to next tab
+    updateTabItems(session, "tabs", "LSI_1")  
+    
+  })
+  
+  
   
   
   # Dimensionality reduction logic
@@ -1420,4 +1449,7 @@ server <- function(input, output, session) {
 }
 
 # Run the application
-shinyApp(ui = ui, server = server)
+shinyApp(ui = ui, server = server, options = list(
+  width = 1200,
+  height = 1200
+))

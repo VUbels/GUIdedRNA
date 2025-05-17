@@ -71,9 +71,9 @@ preprocess_DoubletRemoval <- function(seurat_list) {
     }
     
     send_message(paste("  - Running parameter sweep for", dataset, "..."))
-    sweep.res.list_obj <- paramSweep(seurat_obj, PCs = 1:10, sct = FALSE)
-    sweep.stats_obj <- summarizeSweep(sweep.res.list_obj, GT = FALSE)
-    bcmvn <- find.pK(sweep.stats_obj)
+    sweep.res.list_obj <- DoubletFinder::paramSweep(seurat_obj, PCs = 1:10, sct = FALSE)
+    sweep.stats_obj <- DoubletFinder::summarizeSweep(sweep.res.list_obj, GT = FALSE)
+    bcmvn <- DoubletFinder::find.pK(sweep.stats_obj)
     
     val <- length(seurat_obj@assays$RNA@layers$counts@p)
     expected_doublet <- assign_ExpectedDoublet(val)
@@ -81,12 +81,12 @@ preprocess_DoubletRemoval <- function(seurat_list) {
     
     send_message(paste("  - Computing homotypic proportion for", dataset, "..."))
     annotations <- seurat_obj@meta.data$seurat_clusters
-    homotypic.prop <- modelHomotypic(annotations)
+    homotypic.prop <- DoubletFinder::modelHomotypic(annotations)
     nExp_poi <- round(expected_doublet*nrow(seurat_obj@meta.data))
     nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
     
     send_message(paste("  - Running DoubletFinder on", dataset, "..."))
-    seurat_obj <- doubletFinder(seurat_obj, PCs = 1:10, pN = 0.25, pK = 0.09, nExp = nExp_poi.adj, reuse.pANN = NULL, sct = FALSE)
+    seurat_obj <- DoubletFinder::doubletFinder(seurat_obj, PCs = 1:10, pN = 0.25, pK = 0.09, nExp = nExp_poi.adj, reuse.pANN = NULL, sct = FALSE)
     
     # Create the plot
     send_message(paste("  - Creating diagnostic plot for", dataset, "..."))
@@ -95,7 +95,7 @@ preprocess_DoubletRemoval <- function(seurat_list) {
     positions <- seq(range_x[1], range_x[2], length.out = 6)
     x_at_max <- which.max(bcmvn$BCmetric)
     
-    plot_obj <- ggplot(bcmvn, aes(pK, BCmetric, group = 1)) +
+    plot_obj <- ggplot2::ggplot(bcmvn, aes(pK, BCmetric, group = 1)) +
       ggtitle(dataset) +
       geom_point() +
       geom_line() +
@@ -181,7 +181,7 @@ preprocess_AmbientRNA <- function(seurat_list) {
       seurat_obj <- Seurat::RunUMAP(seurat_obj, dims = 1:10)
     }
     
-    counts <- GetAssayData(object = seurat_obj, layer = "counts")
+    counts <- SeuratObject::GetAssayData(object = seurat_obj, layer = "counts")
     clusters <- Idents(seurat_obj) %>% as.numeric()
     
     # Run on only expressed genes
@@ -191,7 +191,7 @@ preprocess_AmbientRNA <- function(seurat_list) {
     send_message(sprintf("  - Running decontX on %s cells with %s non-zero genes...", cell_count, gene_count))
     
     decon <- tryCatch({
-      decontX(x, z=clusters, verbose=FALSE)
+      decontX::decontX(x, z=clusters, verbose=FALSE)
     }, error = function(e) {
       send_message(paste("  - Error in decontX:", e$message))
       return(NULL)
