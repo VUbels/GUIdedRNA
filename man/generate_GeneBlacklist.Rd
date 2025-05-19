@@ -2,20 +2,20 @@
 % Please edit documentation in R/LSI_functions.R
 \name{generate_GeneBlacklist}
 \alias{generate_GeneBlacklist}
-\title{Function to generate a gene blacklist based on user selections}
+\title{Function to generate a gene blacklist based on user selections.}
 \usage{
 generate_GeneBlacklist(count_matrix, selected_blacklist, send_message = NULL)
 }
 \arguments{
-\item{count_matrix}{raw count matrix from Seurat object}
+\item{count_matrix}{raw count matrix from Seurat object.}
 
-\item{selected_blacklist}{vector of selected blacklist options from UI}
+\item{selected_blacklist}{vector of selected blacklist options from UI.}
 
-\item{send_message}{function to send messages to the UI (optional)}
+\item{send_message}{function to send messages to the UI (optional).}
 }
 \value{
-vector of gene names to blacklist
+vector of gene names to blacklist.
 }
 \description{
-Function to generate a gene blacklist based on user selections
+Function to generate a gene blacklist based on user selections.
 }

@@ -32,6 +32,7 @@ generate_VariableGenes <- function(mat, nvar = 2000, blacklist = NULL){
 
 run_SparseLogX <- function(spmat, logtype="log2", scale=FALSE, scaleFactor=10^4){
   stopifnot(any(logtype == c("log", "log2", "log10")))
+
   
   if(scale == TRUE){
     spmat <- t(t(spmat)/Matrix::colSums(spmat)) * scaleFactor
@@ -61,12 +62,12 @@ run_SparseLogX <- function(spmat, logtype="log2", scale=FALSE, scaleFactor=10^4)
   return(logmat)
 }
 
-#' Function to generate a gene blacklist based on user selections
+#' Function to generate a gene blacklist based on user selections.
 #'
-#' @param count_matrix raw count matrix from Seurat object
-#' @param selected_blacklist vector of selected blacklist options from UI
-#' @param send_message function to send messages to the UI (optional)
-#' @return vector of gene names to blacklist
+#' @param count_matrix raw count matrix from Seurat object.
+#' @param selected_blacklist vector of selected blacklist options from UI.
+#' @param send_message function to send messages to the UI (optional).
+#' @return vector of gene names to blacklist.
 #' 
 generate_GeneBlacklist <- function(count_matrix, selected_blacklist, send_message = NULL) {
   # Initialize empty blacklist
@@ -121,45 +122,72 @@ generate_GeneBlacklist <- function(count_matrix, selected_blacklist, send_messag
   return(blacklist.genes)
 }
 
-#' Function to run iterative LSI on a Seurat object
+#' Function to form row and column sums and means on count matrix from Seurat object.
 #'
-#' @param seurat_obj Seurat object
-#' @param blacklist.genes vector of gene names to blacklist
-#' @param nVarGenes number of variable genes to use
-#' @param resolution vector of resolution values for clustering
-#' @param nPCs number of principal components to use
-#' @param covariates vector of covariates to use for harmony integration
-#' @param umapNeighbors number of neighbors for UMAP
-#' @param umapMinDist minimum distance for UMAP
-#' @param umapDistMetric distance metric for UMAP
-#' @param send_message function to send messages to the UI
-#' @return list containing updated Seurat object and LSI results
+#' @param mat raw count matrix.
+#' @param groups which groups to summarize.
+#' @param na.rm whether to remove any NA from matrix.
+#' @param sparse whether to use sparse matrix conversion.
+
+generate_GroupSums <- function(mat, groups = NULL, na.rm = TRUE, sparse = FALSE){
+  stopifnot(!is.null(groups))
+  stopifnot(length(groups) == ncol(mat))
+  gm <- lapply(unique(groups), function(x) {
+    if (sparse) {
+      Matrix::rowSums(mat[, which(groups == x), drop = F], na.rm = na.rm)
+    }
+    else {
+      rowSums(mat[, which(groups == x), drop = F], na.rm = na.rm)
+    }
+  }) %>% Reduce("cbind", .)
+  colnames(gm) <- unique(groups)
+  return(gm)
+}
+
+
+#' Function to run iterative LSI on a Seurat object.
+#'
+#' @param seurat_obj Seurat object.
+#' @param rawCounts count matrix from Seurat object.
+#' @param blacklist.genes vector of gene names to blacklist.
+#' @param nVarGenes number of variable genes to use.
+#' @param resolution vector of resolution values for clustering.
+#' @param harmonize which dimensions to harmonize.
+#' @param nPCs number of principal components to use.
+#' @param covariates vector of covariates to use for harmony integration.
+#' @param umapNeighbors number of neighbors for UMAP.
+#' @param umapMinDist minimum distance for UMAP.
+#' @param umapDistMetric distance metric for UMAP.
+#' @param send_message function to send messages to the UI.
+#' @return list containing updated Seurat object and LSI results.
 #'
 process_LSI <- function(seurat_obj, 
-                              blacklist.genes = NULL,
-                              nVarGenes = 2000, 
-                              resolution = c(0.2, 0.4, 0.8), 
-                              nPCs = 30, 
-                              covariates = c("orig.ident"),
-                              umapNeighbors = 50,
-                              umapMinDist = 0.5,
-                              umapDistMetric = "cosine",
-                              send_message = NULL) {
+                        rawCounts = NULL,
+                        blacklist.genes = NULL,
+                        nVarGenes = 2000, 
+                        resolution = c(0.2, 0.4, 0.8), 
+                        nPCs = 30, 
+                        harmonize = c(1, 2), 
+                        covariates = c("orig.ident"), 
+                        umapNeighbors = 50,
+                        umapMinDist = 0.5,
+                        umapDistMetric = "cosine",
+                        send_message = NULL) {
   
-  # If no message function provided, create a dummy one
   if (is.null(send_message)) {
-    send_message <- function(msg) {
-      message(msg)
-    }
+    send_message <- function(msg) { message(msg) }
   }
-
+  
   # Perform log normalization
   send_message("Performing log normalization...")
-  log2CP10k <- run_SparseLogX(rawCounts, logtype="log2", scale=TRUE, scaleFactor=10^4)
+  log2CP10k <- run_SparseLogX(spmat = rawCounts, logtype="log2", scale=TRUE, scaleFactor=10^4)
   seurat_obj <- SeuratObject::SetAssayData(object=seurat_obj, layer="data", new.data=log2CP10k)
   
   # Create list to store LSI results
   lsiOut <- list()
+  
+  # Initialize clusters here, just like in the working script
+  clusters <- NULL
   
   # Run iterative LSI
   send_message("Running iterative LSI...")
@@ -172,41 +200,70 @@ process_LSI <- function(seurat_obj,
     if(i == 1){
       send_message(sprintf("Identifying top %s variable genes among all cells...", nVarGenes))
       varGenes <- generate_VariableGenes(log2CP10k, nvar=nVarGenes, blacklist=blacklist.genes)
-    }else{
+    } else {
       # For remaining rounds, calculate variable genes using previous clusters
-      clusterMat <- edgeR::cpm(groupSums(rawCounts, clusters, sparse=TRUE), log=TRUE, prior.count=3)
-      send_message(sprintf("Identifying top %s variable genes from round %s LSI...", nVarGenes, i-1))
-      varGenes <- generate_VariableGenes(clusterMat, nvar=nVarGenes, blacklist=blacklist.genes)
+      # Try-catch to handle potential errors
+      tryCatch({
+        clusterMat <- edgeR::cpm(generate_GroupSums(rawCounts, clusters, sparse=TRUE), log=TRUE, prior.count=3)
+        send_message(sprintf("Identifying top %s variable genes from round %s LSI...", nVarGenes, i-1))
+        varGenes <- generate_VariableGenes(clusterMat, nvar=nVarGenes, blacklist=blacklist.genes)
+      }, error = function(e) {
+        send_message(paste("Error in cluster-based gene selection:", e$message))
+        send_message("Falling back to log-normalized data for gene selection")
+        varGenes <- generate_VariableGenes(log2CP10k, nvar=nVarGenes, blacklist=blacklist.genes)
+      })
     }
     
-    # Run LSI and find clusters
+    # Run LSI
     send_message(sprintf("Running LSI on %d variable genes...", length(varGenes)))
     LSIi <- LSI_function(rawCounts[varGenes,], nComponents = max(nPCs), binarize = FALSE)
     
-    # Harmonize if necessary
-    send_message(sprintf("Harmonizing LSI SVD PCs for round %s...", i))
-    harmonized_pcs <- harmony::HarmonyMatrix(
-      data_mat  = LSIi$matSVD,
-      meta_data = seurat_obj@meta.data,
-      vars_use  = covariates, # Covariates to 'harmonize'
-      do_pca    = FALSE
-    )
-    LSIi$matSVD <- harmonized_pcs
+    # Harmonize if necessary - using same condition as working script
+    if(i %in% harmonize && length(covariates) > 0){
+      send_message(sprintf("Harmonizing LSI SVD PCs for round %s...", i))
+      tryCatch({
+        harmonized_pcs <- harmony::RunHarmony(
+          data_mat  = LSIi$matSVD,
+          meta_data = seurat_obj@meta.data,
+          vars_use  = covariates,
+          do_pca    = FALSE,
+          # Add some conservative parameters for stability
+          nclust = min(20, max(3, floor(ncol(LSIi$matSVD)/5)))
+        )
+        LSIi$matSVD <- harmonized_pcs
+      }, error = function(e) {
+        send_message(paste("Harmony integration failed:", e$message))
+        send_message("Using original SVD results without Harmony integration.")
+      })
+    }
     
-    # Create and store dimension reduction
+    # Create dimension reduction
     reducName <- paste0("LSI_iter", i)
     send_message(sprintf("Creating dimension reduction object for %s...", reducName))
-    seurat_obj[[reducName]] <- CreateDimReducObject(embeddings = LSIi$matSVD, key = sprintf("LSI%s_", i), assay = "RNA")
+    seurat_obj[[reducName]] <- SeuratObject::CreateDimReducObject(
+      embeddings = LSIi$matSVD, 
+      key = sprintf("LSI%s_", i), 
+      assay = "RNA"
+    )
     
     # Find neighbors and clusters
     send_message("Finding nearest neighbors...")
-    seurat_obj <- Seurat::FindNeighbors(object = seurat_obj, reduction = reducName, dims = 1:nPCs, force.recalc = TRUE)
+    seurat_obj <- Seurat::FindNeighbors(
+      object = seurat_obj, 
+      reduction = reducName, 
+      dims = 1:nPCs, 
+      force.recalc = TRUE
+    )
     
     send_message(sprintf("Clustering with resolution %s...", resolution[i]))
-    seurat_obj <- Seurat::FindClusters(object = seurat_obj, resolution = resolution[i], algorithm = 4, method = "igraph")
+    seurat_obj <- Seurat::FindClusters(
+      object = seurat_obj, 
+      resolution = resolution[i]
+    )
     
     # Store cluster identities
     clusters <- Idents(seurat_obj)
+    send_message(sprintf("Found %d clusters in iteration %d", length(unique(clusters)), i))
     
     # Store information
     lsiOut[[reducName]] <- list(
@@ -215,6 +272,9 @@ process_LSI <- function(seurat_obj,
       varFeatures = varGenes, 
       clusters = clusters
     )
+    
+    # Force garbage collection
+    invisible(gc())
     
     send_message(sprintf("Completed LSI round %d", i))
   }
@@ -226,12 +286,12 @@ process_LSI <- function(seurat_obj,
   ))
 }
 
-#' Function to run LSI on a Seurat object
+#' Function to run LSI on a Seurat object.
 #'
 #' @param mat raw count matrix from Seurat object.
 #' @param nComponents number of right singular vectors to estimate.
-#' @param binarize whether to binarize dgCMatrix class
-#' @return list containing LSI results
+#' @param binarize whether to binarize dgCMatrix class.
+#' @return list containing LSI results.
 
 
 LSI_function <- function(mat, nComponents, binarize = FALSE){

@@ -2,7 +2,7 @@
 % Please edit documentation in R/LSI_functions.R
 \name{LSI_function}
 \alias{LSI_function}
-\title{Function to run LSI on a Seurat object}
+\title{Function to run LSI on a Seurat object.}
 \usage{
 LSI_function(mat, nComponents, binarize = FALSE)
 }
@@ -11,11 +11,11 @@ LSI_function(mat, nComponents, binarize = FALSE)
 
 \item{nComponents}{number of right singular vectors to estimate.}
 
-\item{binarize}{whether to binarize dgCMatrix class}
+\item{binarize}{whether to binarize dgCMatrix class.}
 }
 \value{
-list containing LSI results
+list containing LSI results.
 }
 \description{
-Function to run LSI on a Seurat object
+Function to run LSI on a Seurat object.
 }

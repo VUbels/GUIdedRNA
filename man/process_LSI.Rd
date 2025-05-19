@@ -2,14 +2,16 @@
 % Please edit documentation in R/LSI_functions.R
 \name{process_LSI}
 \alias{process_LSI}
-\title{Function to run iterative LSI on a Seurat object}
+\title{Function to run iterative LSI on a Seurat object.}
 \usage{
 process_LSI(
   seurat_obj,
+  rawCounts = NULL,
   blacklist.genes = NULL,
   nVarGenes = 2000,
   resolution = c(0.2, 0.4, 0.8),
   nPCs = 30,
+  harmonize = c(1, 2),
   covariates = c("orig.ident"),
   umapNeighbors = 50,
   umapMinDist = 0.5,
@@ -18,29 +20,33 @@ process_LSI(
 )
 }
 \arguments{
-\item{seurat_obj}{Seurat object}
+\item{seurat_obj}{Seurat object.}
 
-\item{blacklist.genes}{vector of gene names to blacklist}
+\item{rawCounts}{count matrix from Seurat object.}
 
-\item{nVarGenes}{number of variable genes to use}
+\item{blacklist.genes}{vector of gene names to blacklist.}
 
-\item{resolution}{vector of resolution values for clustering}
+\item{nVarGenes}{number of variable genes to use.}
 
-\item{nPCs}{number of principal components to use}
+\item{resolution}{vector of resolution values for clustering.}
 
-\item{covariates}{vector of covariates to use for harmony integration}
+\item{nPCs}{number of principal components to use.}
 
-\item{umapNeighbors}{number of neighbors for UMAP}
+\item{harmonize}{which dimensions to harmonize.}
 
-\item{umapMinDist}{minimum distance for UMAP}
+\item{covariates}{vector of covariates to use for harmony integration.}
 
-\item{umapDistMetric}{distance metric for UMAP}
+\item{umapNeighbors}{number of neighbors for UMAP.}
 
-\item{send_message}{function to send messages to the UI}
+\item{umapMinDist}{minimum distance for UMAP.}
+
+\item{umapDistMetric}{distance metric for UMAP.}
+
+\item{send_message}{function to send messages to the UI.}
 }
 \value{
-list containing updated Seurat object and LSI results
+list containing updated Seurat object and LSI results.
 }
 \description{
-Function to run iterative LSI on a Seurat object
+Function to run iterative LSI on a Seurat object.
 }

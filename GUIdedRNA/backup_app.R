@@ -4,16 +4,25 @@ library(shinydashboard)
 library(shinyFiles)
 library(shinyjs)
 library(shinycssloaders)
+library(R6)
 
-message("Starting app.R...")
-if (file.exists("global.R")) {
-  message("Found global.R, loading it...")
-  source("global.R")
-} else {
-  message("global.R not found in working directory:", getwd())
-}
+library(Seurat)
+library(ggplot2)
+library(DT)
+library(Matrix)
+library(dplyr)
+library(DoubletFinder)
+library(decontX)
+library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+library(org.Hs.eg.db)
 
 #library(GUIdedRNA)
+
+source("~/GUIdedRNA/GUIdedRNA/global.R")
+source("~/GUIdedRNA/R/preprocessing_functions.R")
+source("~/GUIdedRNA/R/LSI_functions.R")
+
+options(shiny.maxRequestSize = 100 * 1024^3)
 
 # Global message queue 
 message_queue <- character(0)
@@ -67,21 +76,8 @@ ui <- dashboardPage(
       consoleOutput.appendChild(p);
       consoleOutput.scrollTop = consoleOutput.scrollHeight;
     }
-  };
-  
-  shinyjs.appendToLSI1_Console = function(message) {
-    var consoleOutput = document.getElementById('lsi1_ConsoleOutput');
-    if(consoleOutput) {
-      var p = document.createElement('p');
-      p.innerHTML = message;
-      p.style.fontSize = '0.75em';
-      p.style.margin = '0';
-      p.style.padding = '2px 0';
-      consoleOutput.appendChild(p);
-      consoleOutput.scrollTop = consoleOutput.scrollHeight;
-    }
   }",
-      functions = c("appendToConsole", "appendToLSI1_Console")
+      functions = c("appendToConsole")
     ),
     
     tabItems(
@@ -278,12 +274,12 @@ ui <- dashboardPage(
                                  value = 2000, min = 100, max = 10000, step = 100),
                     
                     sliderInput("nPCs", "Number of Principal Components", 
-                                value = 25, min = 10, max = 100, step = 5),
+                                value = 30, min = 10, max = 100, step = 5),
                     
                     textInput("resolution", "Clustering Resolutions (comma separated)", 
-                              value = "0.2, 0.4, 0.6"),
+                              value = "0.2, 0.4, 0.8"),
                     
-                    textInput("covariates", "Harmony Covariates", 
+                    textInput("covariates", "Harmony Covariates (comma separated)", 
                               value = "orig.ident"),
                     
                     # UMAP parameters
@@ -306,8 +302,8 @@ ui <- dashboardPage(
                 box(
                   title = "LSI Round 1 Results",
                   width = 8,
-                  # Here's the ID change to match the JS function
-                  div(id = "lsi1_ConsoleOutput", 
+                  # Add these style attributes for text alignment
+                  div(id = "consoleOutput", 
                       style = "white-space: pre-wrap; height: 750px; overflow-y: auto; background-color: #f5f5f5; padding: 1px; font-family: monospace; text-align: left; vertical-align: top;")
                 )
               )
@@ -429,33 +425,18 @@ ui <- dashboardPage(
 
 #Defining server logic
 server <- function(input, output, session) {
-  
-  options(shiny.maxRequestSize = 100 * 1024^3)
-  
-  
-  # Initialize log text reactive values
+
+  # Initialize log text reactive value
   log_text <- reactiveVal("")
-  lsi1_log_text <- reactiveVal("")
-  
+
   display_ui_message <- function(msg) {
-    # Function to display messages in the preprocessing UI console
+    # Function to display messages in the UI console
     # Update the log text
     current <- isolate(log_text())
     log_text(paste0(current, msg, "\n"))
     
     # Send to JavaScript console
     js$appendToConsole(msg)
-  }
-  
-  # 4. Create a new function specifically for LSI messages:
-  display_lsi1_message <- function(msg) {
-    # Function to display messages in the LSI1 UI console
-    # Update the log text (if you want to share the log between consoles)
-    current <- isolate(lsi1_log_text())
-    lsi1_log_text(paste0(current, msg, "\n"))
-    
-    # Send to JavaScript console using the LSI1-specific function
-    js$appendToLSI1_Console(msg)
   }
   
   # Create an observer that checks for new messages
@@ -473,11 +454,6 @@ server <- function(input, output, session) {
   
   assign("send_message", function(msg) {
     display_ui_message(msg)
-  }, envir = .GlobalEnv)
-  
-  # For LSI1 tab
-  assign("send_lsi1_message", function(msg) {
-    display_lsi1_message(msg)
   }, envir = .GlobalEnv)
   
   # Render log text
@@ -799,6 +775,7 @@ server <- function(input, output, session) {
       
       # Store the list in reactive values - instead of combining objects
       values$seurat_list <- seurat_list
+      values$original_seurat_list <- seurat_list
       
       # Show success notification
       showNotification(paste("Loaded", length(seurat_list), "datasets successfully!"), type = "message")
@@ -1246,10 +1223,6 @@ server <- function(input, output, session) {
       merged_seurat <- SeuratObject::JoinLayers(merged_seurat)
       values$seurat <- merged_seurat
       values$preprocess_done <- TRUE
-      
-      values$seurat_list <- NULL
-      gc()
-      
       send_message("Preprocessing and merging completed successfully!")
     })
     
@@ -1260,51 +1233,11 @@ server <- function(input, output, session) {
   observeEvent(input$commitLSI_1, {
     req(values$seurat)
     
-    # Reset the log text if needed
+    # Reset the log text
     log_text("")
     
     # Get the Seurat object
     LSI1_seurat <- values$seurat
-    
-    tryCatch({
-      rawCounts <- Seurat::GetAssayData(object=LSI1_seurat, layer = "counts")
-      
-      # Verify rawCounts is valid
-      if (is.null(rawCounts) || length(rawCounts) == 0) {
-        send_lsi1_message("Error: Count matrix is empty or null. Attempting to fix...")
-        
-        # Try to recover counts from the Seurat object
-        if ("RNA" %in% names(LSI1_seurat@assays)) {
-          if ("counts" %in% names(LSI1_seurat@assays$RNA@layers)) {
-            rawCounts <- LSI1_seurat@assays$RNA@layers$counts
-            send_lsi1_message("Successfully recovered count matrix from RNA assay.")
-          } else {
-            # If counts layer is missing, try to recreate it from data
-            send_lsi1_message("Counts layer not found. Creating count matrix from data layer...")
-            data_matrix <- LSI1_seurat@assays$RNA@layers$data
-            if (!is.null(data_matrix)) {
-              # Create counts by un-log-transforming data (approximate)
-              rawCounts <- 2^data_matrix - 1
-              # Set small values to 0 and round
-              rawCounts@x[rawCounts@x < 0.5] <- 0
-              rawCounts <- round(rawCounts)
-              send_lsi1_message("Created approximate count matrix from data layer.")
-              
-              # Store it back in the Seurat object
-              LSI1_seurat@assays$RNA@layers$counts <- rawCounts
-            } else {
-              send_lsi1_message("ERROR: Cannot recover count data. Attempting normal Seurat workflow...")
-              # Fall back to standard Seurat normalization
-              LSI1_seurat <- Seurat::NormalizeData(LSI1_seurat)
-              rawCounts <- Seurat::GetAssayData(object=LSI1_seurat, layer = "counts")
-            }
-          }
-        } else {
-          send_lsi1_message("ERROR: RNA assay not found. Cannot proceed.")
-          return()
-        }
-      }
-    })
     
     # Get selected parameters
     selected_blacklist <- input$blacklist_genes
@@ -1315,30 +1248,29 @@ server <- function(input, output, session) {
     umapNeighbors <- input$umapNeighbors
     umapMinDist <- input$umapMinDist
     umapDistMetric <- input$umapDistMetric
-
+    
     # Log normalization on sparse matrix
-    send_lsi1_message("Log normalization of sparse data matrix")
+    send_message("Log normalization of sparse data matrix")
     rawCounts <- Seurat::GetAssayData(object=LSI1_seurat, layer = "counts")
     
     # Generate blacklist based on user selections
-    blacklist.genes <- generate_GeneBlacklist(rawCounts, selected_blacklist, 
-                                              function(msg) send_lsi1_message(msg))
+    blacklist.genes <- generate_GeneBlacklist(rawCounts, selected_blacklist, send_message)
     
     # If no options selected, show a notification
     if(length(selected_blacklist) == 0) {
       showNotification("Running without ignoring any genes", type = "warning")
     }
     
-    send_lsi1_message("Starting LSI preprocessing...")
+    send_message("Starting LSI preprocessing...")
     
     # Show selected parameters
-    send_lsi1_message(sprintf("Using LSI parameters:"))
-    send_lsi1_message(sprintf("  - Number of variable genes: %d", nVarGenes))
-    send_lsi1_message(sprintf("  - Number of PCs: %d", nPCs))
-    send_lsi1_message(sprintf("  - Resolutions: %s", paste(resolution, collapse = ", ")))
-    send_lsi1_message(sprintf("  - Covariates for harmony: %s", paste(covariates, collapse = ", ")))
-    send_lsi1_message(sprintf("  - UMAP parameters: neighbors=%d, min_dist=%.2f, metric=%s", 
-                              umapNeighbors, umapMinDist, umapDistMetric))
+    send_message(sprintf("Using LSI parameters:"))
+    send_message(sprintf("  - Number of variable genes: %d", nVarGenes))
+    send_message(sprintf("  - Number of PCs: %d", nPCs))
+    send_message(sprintf("  - Resolutions: %s", paste(resolution, collapse = ", ")))
+    send_message(sprintf("  - Covariates for harmony: %s", paste(covariates, collapse = ", ")))
+    send_message(sprintf("  - UMAP parameters: neighbors=%d, min_dist=%.2f, metric=%s", 
+                         umapNeighbors, umapMinDist, umapDistMetric))
     
     # Run LSI
     lsi_results <- process_LSI(
@@ -1352,17 +1284,18 @@ server <- function(input, output, session) {
       umapNeighbors = umapNeighbors,
       umapMinDist = umapMinDist,
       umapDistMetric = umapDistMetric,
-      send_message = function(msg) send_lsi1_message(msg)
+      send_message = send_message
     )
     
     # Update values
     values$seurat <- lsi_results$seurat_obj
     values$lsiOut <- lsi_results$lsiOut
     
-    send_lsi1_message("LSI round 1 processing complete!")
-    
+    send_message("LSI round 1 processing complete!")
+  
     # Navigate to next tab
     updateTabItems(session, "tabs", "LSI_1")  
+    
   })
   
   
