@@ -1,16 +1,20 @@
 # global.R
 library(R6)
-library(Seurat)
-library(ggplot2)
 library(DT)
+
+
+library(ggplot2)
 library(Matrix)
 library(dplyr)
-library(DoubletFinder)
-library(decontX)
-library(TxDb.Hsapiens.UCSC.hg38.knownGene)
-library(org.Hs.eg.db)
 library(irlba)
 library(edgeR)
+
+library(DoubletFinder)
+library(decontX)
+library(Seurat)
+
+library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+library(org.Hs.eg.db)
 
 # Global message queue
 message("Loading global.R file...")

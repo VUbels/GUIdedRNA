@@ -42,12 +42,25 @@ ui <- dashboardPage(
     sidebarMenu(
       id = "tabs",
       menuItem("Setup", tabName = "upload", icon = icon("upload"), selected = TRUE),
+      
+      tags$li(class = "divider", style = "height: 1px; margin: 9px 0; overflow: hidden; background-color: #666;"),
+      
       menuItem("Sample Information", tabName = "information", icon = icon("list")),
       menuItem("Quality Control", tabName = "qc", icon = icon("check-circle")),
       menuItem("Preprocessing", tabName = "preprocess", icon = icon("filter")),
+      
+      tags$li(class = "divider", style = "height: 1px; margin: 9px 0; overflow: hidden; background-color: #666;"),
+      
       menuItem("LSI Round 1", tabName = "LSI_1", icon = icon("project-diagram")),
-      menuItem("Clustering", tabName = "cluster", icon = icon("object-group")),
-      menuItem("Cell Type Annotation", tabName = "annotate", icon = icon("tags")),
+      menuItem("Initial Clustering", tabName = "broad_cluster", icon = icon("object-group")),
+      
+      tags$li(class = "divider", style = "height: 1px; margin: 9px 0; overflow: hidden; background-color: #666;"),
+      
+      menuItem("LSI Round 2", tabName = "LSI_2", icon = icon("project-diagram")),
+      menuItem("Final Clustering", tabName = "specific_cluster", icon = icon("object-group")),
+      
+      tags$li(class = "divider", style = "height: 1px; margin: 9px 0; overflow: hidden; background-color: #666;"),
+      
       menuItem("Download Results", tabName = "download", icon = icon("download"))
     )
   ),
@@ -89,13 +102,18 @@ ui <- dashboardPage(
       tabItem(tabName = "upload",
               
               fluidRow(
+                
                 box(
                   title = "Set Output Directory",
                   width = 12,
-                  shinyDirButton("folderBtn_output", "Select Directory", "Choose an output directory"),
+                  tags$div(
+                    style = "width: 20%; display: inline-block;",
+                    shinyDirButton("folderBtn_output", "Select Directory", "Choose an output directory")),
                   helpText("Select directory that will contain all output"),
                   textOutput("outputFolder"),
-                  actionButton("outputData_folder", "Set Output Folder")
+                  actionButton("outputData_folder", "Set Output Folder",
+                               class = "btn-success", 
+                               style = "color: white; width: 20%;")
                 ),
               ),
               
@@ -106,7 +124,9 @@ ui <- dashboardPage(
                   shinyDirButton("folderBtn_single", "Select Directory", "Choose a directory with 10X data"),
                   helpText("Select directory containing files, or directory containing dataset folders"),
                   textOutput("selectedFolder"),
-                  actionButton("loadData_folder", "Load Data")
+                  actionButton("loadData_folder", "Load Data",
+                               class = "btn-success", 
+                               style = "color: white; width: 20%;")
                 ),
               ),
               
@@ -117,7 +137,9 @@ ui <- dashboardPage(
                   fileInput("matrixFile", "Matrix (.mtx)"),
                   fileInput("featuresFile", "Features/Genes (.tsv/.txt)"),
                   fileInput("barcodesFile", "Barcodes (.tsv/.txt)"),
-                  actionButton("loadData_file", "Load Data")
+                  actionButton("loadData_file", "Load Data",
+                               class = "btn-success", 
+                               style = "color: white; width: 20%;")
                 ),
               ),
               
@@ -170,7 +192,7 @@ ui <- dashboardPage(
                           
                           # Button to create the new column
                           actionButton("createNewColumn", "Create New Column", 
-                                       class = "btn-success", style = "margin-top: 15px;"),
+                                       class = "btn-success", style = "color: white; width: 100%; margin-top: 15px;"),
                           
                           # Display added columns
                           tags$hr(),
@@ -190,29 +212,42 @@ ui <- dashboardPage(
                 box(
                   title = "QC Parameters",
                   width = 4,
+                  solidHeader = TRUE,
+                  status = "primary",
+                  height = "650px",
                   
                   # Side by side gene count inputs
                   fluidRow(
                     column(6, numericInput("minFeatures", "Min Genes", min = 0, value = 200, step = 100)),
-                    column(6, numericInput("maxFeatures", "Max Genes", min = 0, value = 5000, step = 100)),
-                    helpText("Determines minimum and maximum variety of genes in data")
+                    column(6, numericInput("maxFeatures", "Max Genes", min = 0, value = 5000, step = 100))
                   ),
+                  helpText(style = "margin-bottom: 15px; font-size: 0.9em;", 
+                           "Determines minimum and maximum variety of genes in data"),
                   
                   # Side by side feature inputs
                   fluidRow(
                     column(6, numericInput("minCount", "Min Count", min = 0, value = 100, step = 100)),
-                    column(6, numericInput("maxCount", "Max Count", min = 0, value = 3000, step = 100)),
-                    helpText("Determines minimum and maximum total RNA count in data")
+                    column(6, numericInput("maxCount", "Max Count", min = 0, value = 3000, step = 100))
                   ),
+                  helpText(style = "margin-bottom: 15px; font-size: 0.9em;", 
+                           "Determines minimum and maximum total RNA count in data"),
                   
                   # Single mitochondrial percentage input
                   numericInput("maxMito", "Max Mitochondrial %", min = 0, max = 100, value = 20),
-                  helpText("Determines minimum and maximum mitochondrial RNA in data"),
-                  actionButton("runQC", "Run QC")
+                  helpText(style = "margin-bottom: 15px; font-size: 0.9em;", 
+                           "Determines minimum and maximum mitochondrial RNA in data"),
+                  
+                  # Add some padding above the button
+                  div(style = "padding-top: 10px;",
+                      actionButton("runQC", "Run QC",
+                                   class = "btn-success", 
+                                   style = "color: white; width: 100%;")
+                  )
                 ),
                 box(
                   title = "QC Metrics",
                   width = 8,
+                  height = "650px",
                   plotOutput("qcPlot") %>% withSpinner()
                 )
               ),
@@ -231,6 +266,9 @@ ui <- dashboardPage(
                 box(
                   title = "Preprocessing Options",
                   width = 4,
+                  status = "primary",
+                  height = "650px",
+                  solidHeader = TRUE,
                   checkboxGroupInput("preprocessMethods", "Select Preprocessing Methods", 
                                      choices = c("Doublet Removal" = "doublet", 
                                                  "Ambient RNA Removal" = "ambient"),
@@ -239,11 +277,12 @@ ui <- dashboardPage(
                   ),
                   actionButton("commitPreprocessing", "Run Selected Methods", 
                                class = "btn-success", 
-                               style = "width: 100%;")
+                               style = "color: white; width: 100%;")
                 ),
                 box(
                   title = "Preprocessing Results",
                   width = 8,
+                  height = "650px",
                   # Add these style attributes for text alignment
                   div(id = "consoleOutput", 
                       style = "white-space: pre-wrap; height: 600px; overflow-y: auto; background-color: #f5f5f5; padding: 1px; font-family: monospace; text-align: left; vertical-align: top;")
@@ -255,16 +294,18 @@ ui <- dashboardPage(
               fluidRow(
                 column(
                   width = 4,
+                  height = "900px",
                   box(
                     title = "Blacklist Settings",
                     width = NULL,
                     status = "primary",
                     solidHeader = TRUE,
-                    checkboxGroupInput("blacklist_genes", "Ignore genes from DE analysis (Recommended)", 
+                    checkboxGroupInput("blacklist_genes", "Ignore genes for LSI clustering (Not DE analysis)", 
                                        choices = c("Ignore Mitochondrial Genes" = "blacklist_mitogenes", 
                                                    "Ignore X/Y chomosomal genes" = "blacklist_sexgenes",
                                                    "Ignore Ribosomal genes" = "blacklist_rbgenes"),
                                        selected = c("blacklist_mitogenes", "blacklist_sexgenes", "blacklist_rbgenes")
+                                       
                     )
                   ),
                   
@@ -297,95 +338,35 @@ ui <- dashboardPage(
                                 choices = c("cosine", "euclidean", "manhattan", "hamming"),
                                 selected = "cosine"),
                     
-                    actionButton("commitLSI_1", "Run LSI with Selected Parameters", 
+                    actionButton("commitLSI_1", "Run LSI - Round 1", 
                                  class = "btn-success", 
-                                 style = "width: 100%;")
+                                 style = "color: white; width: 100%;")
                   )
                 ),
                 
                 box(
                   title = "LSI Round 1 Results",
                   width = 8,
-                  # Here's the ID change to match the JS function
+                  height = "930px",
                   div(id = "lsi1_ConsoleOutput", 
-                      style = "white-space: pre-wrap; height: 750px; overflow-y: auto; background-color: #f5f5f5; padding: 1px; font-family: monospace; text-align: left; vertical-align: top;")
+                      style = "white-space: pre-wrap; height: 850px; overflow-y: auto; background-color: #f5f5f5; padding: 1px; font-family: monospace; text-align: left; vertical-align: top;")
                 )
               )
       ),
       
-      # Dimensionality Reduction tab
-      tabItem(tabName = "dimreduce",
-              fluidRow(
-                box(
-                  title = "PCA Parameters",
-                  width = 4,
-                  numericInput("nPCs", "Number of PCs", value = 30),
-                  actionButton("runPCA", "Run PCA")
-                ),
-                box(
-                  title = "PCA Results",
-                  width = 8,
-                  plotOutput("pcaPlot") %>% withSpinner(),
-                  plotOutput("elbowPlot") %>% withSpinner()
-                )
-              ),
-              fluidRow(
-                box(
-                  title = "UMAP/t-SNE Parameters",
-                  width = 4,
-                  numericInput("pcDims", "PCs to Use", value = 20),
-                  selectInput("reduction", "Reduction Method", 
-                              choices = c("UMAP", "t-SNE"), 
-                              selected = "UMAP"),
-                  actionButton("runReduction", "Run Reduction")
-                ),
-                box(
-                  title = "Reduction Results",
-                  width = 8,
-                  plotOutput("reductionPlot") %>% withSpinner()
-                )
-              )
-      ),
-      
-      # Clustering tab
-      tabItem(tabName = "cluster",
-              fluidRow(
-                box(
-                  title = "Clustering Parameters",
-                  width = 4,
-                  selectInput("clusterAlgo", "Algorithm", 
-                              choices = c("Louvain", "Leiden"), 
-                              selected = "Louvain"),
-                  sliderInput("resolution", "Resolution", min = 0.1, max = 2.0, value = 0.8, step = 0.1),
-                  actionButton("runClustering", "Run Clustering")
-                ),
-                box(
-                  title = "Clustering Results",
-                  width = 8,
-                  plotOutput("clusterPlot") %>% withSpinner()
-                )
-              ),
-              fluidRow(
-                box(
-                  title = "Cluster Statistics",
-                  width = 12,
-                  DTOutput("clusterStats")
-                )
-              )
-      ),
       
       # Cell Type Annotation tab
-      tabItem(tabName = "annotate",
+      tabItem(tabName = "annotate_broad",
               fluidRow(
+                column(
+                  width = 4,
                 box(
                   title = "Marker Gene Analysis",
-                  width = 4,
-                  numericInput("maxMarkers", "Max Markers per Cluster", value = 10),
+                  numericInput("maxMarkers", "Max Markers per Cluster", value = 15),
                   actionButton("findMarkers", "Find Markers")
                 ),
                 box(
                   title = "Marker Gene Results",
-                  width = 8,
                   DTOutput("markerTable") %>% withSpinner()
                 )
               ),
@@ -404,7 +385,8 @@ ui <- dashboardPage(
                   plotOutput("annotatedPlot") %>% withSpinner()
                 )
               )
-      ),
+            )
+        ),
       
       # Download Results tab
       tabItem(tabName = "download",
@@ -490,13 +472,10 @@ server <- function(input, output, session) {
     original_seurat = NULL,
     qc_done = FALSE,
     preprocess_done = FALSE,
-    norm_done = FALSE,
-    features_done = FALSE,
-    pca_done = FALSE,
-    reduction_done = FALSE,
-    cluster_done = FALSE,
-    markers_done = FALSE,
-    annotation_done = FALSE
+    LSI1_done = FALSE,
+    broad_cluster_done = FALSE,
+    LSI2_done = FALSE,
+    specific_cluster_done = FALSE
   )
   
   # Define volumes in a platform-agnostic way
@@ -1355,106 +1334,23 @@ server <- function(input, output, session) {
       send_message = function(msg) send_lsi1_message(msg)
     )
     
+    
+    
     # Update values
     values$seurat <- lsi_results$seurat_obj
     values$lsiOut <- lsi_results$lsiOut
     
     send_lsi1_message("LSI round 1 processing complete!")
     
-    # Navigate to next tab
-    updateTabItems(session, "tabs", "LSI_1")  
-  })
-  
-  
-  
-  
-  # Dimensionality reduction logic
-  observeEvent(input$runPCA, {
-    req(values$seurat, values$features_done)
-    
-    withProgress(message = 'Running PCA...', {
-      values$seurat <- 
-      values$seurat <- ScaleData(values$seurat, features = VariableFeatures(values$seurat))
-      values$seurat <- RunPCA(values$seurat, features = VariableFeatures(values$seurat), npcs = input$nPCs)
-      
-      values$pca_done <- TRUE
-    })
-    
-    # Plot PCA results
-    output$pcaPlot <- renderPlot({
-      req(values$seurat, values$pca_done)
-      DimPlot(values$seurat, reduction = "pca")
-    })
-    
-    # Plot elbow plot
-    output$elbowPlot <- renderPlot({
-      req(values$seurat, values$pca_done)
-      ElbowPlot(values$seurat, ndims = input$nPCs)
-    })
-  })
-  
-  observeEvent(input$runReduction, {
-    req(values$seurat, values$pca_done)
-    
-    withProgress(message = paste('Running', input$reduction, '...'), {
-      if(input$reduction == "UMAP") {
-        values$seurat <- RunUMAP(values$seurat, dims = 1:input$pcDims)
-      } else if(input$reduction == "t-SNE") {
-        values$seurat <- RunTSNE(values$seurat, dims = 1:input$pcDims)
-      }
-      
-      values$reduction_done <- TRUE
-    })
-    
-    # Plot reduction results
-    output$reductionPlot <- renderPlot({
-      req(values$seurat, values$reduction_done)
-      DimPlot(values$seurat, reduction = tolower(input$reduction))
-    })
+    values$LSI1_done <- TRUE
     
     # Navigate to next tab
-    updateTabItems(session, "tabs", "cluster")
-  })
-  
-  # Clustering logic
-  observeEvent(input$runClustering, {
-    req(values$seurat, values$reduction_done)
-    
-    withProgress(message = 'Running clustering...', {
-      # Find neighbors
-      values$seurat <- FindNeighbors(values$seurat, dims = 1:input$pcDims)
-      
-      # Find clusters
-      algorithm <- ifelse(input$clusterAlgo == "Louvain", 1, 4) # 1 for Louvain, 4 for Leiden
-      values$seurat <- FindClusters(values$seurat, resolution = input$resolution, algorithm = algorithm)
-      
-      values$cluster_done <- TRUE
-    })
-    
-    # Plot clustering results
-    output$clusterPlot <- renderPlot({
-      req(values$seurat, values$cluster_done)
-      DimPlot(values$seurat, reduction = tolower(input$reduction), group.by = "seurat_clusters", label = TRUE)
-    })
-    
-    # Show cluster statistics
-    output$clusterStats <- renderDT({
-      req(values$seurat, values$cluster_done)
-      table_data <- table(values$seurat$seurat_clusters)
-      data.frame(
-        Cluster = names(table_data),
-        Cell_Count = as.vector(table_data),
-        Percentage = round(as.vector(table_data) / sum(table_data) * 100, 2)
-      )
-    })
-    
-    # Navigate to next tab
-    updateTabItems(session, "tabs", "annotate")
+    updateTabItems(session, "tabs", "BroadClustering")  
   })
   
   # Cell type annotation logic
-  observeEvent(input$findMarkers, {
-    req(values$seurat, values$cluster_done)
+  observeEvent(input$BroadClustering, {
+    req(values$seurat, values$LSI_done)
     
     withProgress(message = 'Finding marker genes...', {
       # Find markers for each cluster

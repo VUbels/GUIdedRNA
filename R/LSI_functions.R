@@ -265,6 +265,18 @@ process_LSI <- function(seurat_obj,
     clusters <- Idents(seurat_obj)
     send_message(sprintf("Found %d clusters in iteration %d", length(unique(clusters)), i))
     
+    #Runs differential gene analysis on resulting clusters
+    send_message("Finding differentially expressed genes for latest clusters...")
+      
+    seurat_obj <- Seurat::FindAllMarkers(
+      object = seurat_obj,
+      test.use = "wilcox",  #Uses presto for quick DE implementation
+      only.pos = TRUE,
+      min.pct = 30,
+      logfc.threshold = 0.3,
+      group.by = "ident"
+    )
+    
     # Store information
     lsiOut[[reducName]] <- list(
       lsiMat = LSIi$matSVD,
