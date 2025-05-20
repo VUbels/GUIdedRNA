@@ -52,12 +52,12 @@ ui <- dashboardPage(
       tags$li(class = "divider", style = "height: 1px; margin: 9px 0; overflow: hidden; background-color: #666;"),
       
       menuItem("LSI Round 1", tabName = "LSI_1", icon = icon("project-diagram")),
-      menuItem("Initial Clustering", tabName = "broad_cluster", icon = icon("object-group")),
+      menuItem("Initial Clustering", tabName = "annotate_broad", icon = icon("object-group")),
       
       tags$li(class = "divider", style = "height: 1px; margin: 9px 0; overflow: hidden; background-color: #666;"),
       
       menuItem("LSI Round 2", tabName = "LSI_2", icon = icon("project-diagram")),
-      menuItem("Final Clustering", tabName = "specific_cluster", icon = icon("object-group")),
+      menuItem("Final Clustering", tabName = "annotate_specific", icon = icon("object-group")),
       
       tags$li(class = "divider", style = "height: 1px; margin: 9px 0; overflow: hidden; background-color: #666;"),
       
@@ -358,35 +358,104 @@ ui <- dashboardPage(
       # Cell Type Annotation tab
       tabItem(tabName = "annotate_broad",
               fluidRow(
+                # Left column - DE genes and markers
                 column(
                   width = 4,
-                box(
-                  title = "Marker Gene Analysis",
-                  numericInput("maxMarkers", "Max Markers per Cluster", value = 15),
-                  actionButton("findMarkers", "Find Markers")
+                  box(
+                    title = "Marker Gene Analysis",
+                    width = NULL, # Full width of column
+                    status = "primary",
+                    solidHeader = TRUE,
+                    
+                    # Slider instead of numeric input for max markers
+                    sliderInput("maxMarkers", "Max Markers per Cluster", 
+                                min = 0, max = 30, value = 15, step = 1),
+                    
+                    # Action button with consistent styling
+                    div(style = "margin-top: 15px; margin-bottom: 15px;",
+                        actionButton("findMarkers", "Find Markers",
+                                     class = "btn-success", 
+                                     style = "color: white; width: 100%;")
+                    )
+                  ),
+                  
+                  box(
+                    title = "Differentially Expressed Genes",
+                    width = NULL, # Full width of column
+                    height = "500px",
+                    status = "primary",
+                    solidHeader = TRUE,
+                    
+                    # Cluster selection dropdown
+                    selectInput("clusterSelect", "Select Cluster", 
+                                choices = NULL, # Will be populated dynamically
+                                width = "100%"),
+                    
+                    # Marker gene table with scroll
+                    div(style = "height: 400px; overflow-y: auto;",
+                        DTOutput("markerTable") %>% withSpinner()
+                    )
+                  )
                 ),
-                box(
-                  title = "Marker Gene Results",
-                  DTOutput("markerTable") %>% withSpinner()
+                
+                # Right column - UMAP visualization
+                column(
+                  width = 8,
+                  box(
+                    title = "Cluster Visualization",
+                    width = NULL, # Full width of column
+                    height = "657px", # Match left column height
+                    status = "primary",
+                    solidHeader = TRUE,
+                    
+                    # Feature selection for UMAP coloring
+                    fluidRow(
+                      column(6, 
+                             selectInput("umapDisplayType", "Display Type",
+                                         choices = c("Clusters" = "clusters", 
+                                                     "Gene Expression" = "gene"),
+                                         selected = "clusters",
+                                         width = "100%")
+                      ),
+                      column(6,
+                             # Conditional UI for gene selection
+                             conditionalPanel(
+                               condition = "input.umapDisplayType == 'gene'",
+                               selectInput("featureSelect", "Select Feature", 
+                                           choices = NULL, # Will be populated dynamically
+                                           width = "100%")
+                             )
+                      )
+                    ),
+                    
+                    # UMAP plot with spinner
+                    div(style = "height: 550px;",
+                        plotOutput("clusterUMAP", height = "100%") %>% withSpinner()
+                    )
+                  )
                 )
               ),
+              
+              # Bottom section - Cell type assignment
               fluidRow(
                 box(
                   title = "Cell Type Assignment",
                   width = 12,
+                  status = "success",
+                  solidHeader = TRUE,
+                  
+                  # Cell type assignment UI (will be rendered dynamically)
                   uiOutput("cellTypeUI"),
-                  actionButton("assignCellTypes", "Assign Cell Types")
-                )
-              ),
-              fluidRow(
-                box(
-                  title = "Annotated Clusters",
-                  width = 12,
-                  plotOutput("annotatedPlot") %>% withSpinner()
+                  
+                  # Action button for assigning cell types
+                  div(style = "margin-top: 20px;",
+                      actionButton("assignCellTypes", "Assign Cell Types",
+                                   class = "btn-success", 
+                                   style = "color: white; width: 20%;")
+                  )
                 )
               )
-            )
-        ),
+      ),
       
       # Download Results tab
       tabItem(tabName = "download",
@@ -1254,13 +1323,16 @@ server <- function(input, output, session) {
         
         # Try to recover counts from the Seurat object
         if ("RNA" %in% names(LSI1_seurat@assays)) {
+          
           if ("counts" %in% names(LSI1_seurat@assays$RNA@layers)) {
             rawCounts <- LSI1_seurat@assays$RNA@layers$counts
             send_lsi1_message("Successfully recovered count matrix from RNA assay.")
-          } else {
+          
+            } else {
             # If counts layer is missing, try to recreate it from data
             send_lsi1_message("Counts layer not found. Creating count matrix from data layer...")
             data_matrix <- LSI1_seurat@assays$RNA@layers$data
+            
             if (!is.null(data_matrix)) {
               # Create counts by un-log-transforming data (approximate)
               rawCounts <- 2^data_matrix - 1
@@ -1271,7 +1343,8 @@ server <- function(input, output, session) {
               
               # Store it back in the Seurat object
               LSI1_seurat@assays$RNA@layers$counts <- rawCounts
-            } else {
+            
+              } else {
               send_lsi1_message("ERROR: Cannot recover count data. Attempting normal Seurat workflow...")
               # Fall back to standard Seurat normalization
               LSI1_seurat <- Seurat::NormalizeData(LSI1_seurat)
@@ -1334,11 +1407,8 @@ server <- function(input, output, session) {
       send_message = function(msg) send_lsi1_message(msg)
     )
     
-    
-    
     # Update values
     values$seurat <- lsi_results$seurat_obj
-    values$lsiOut <- lsi_results$lsiOut
     
     send_lsi1_message("LSI round 1 processing complete!")
     
@@ -1349,15 +1419,16 @@ server <- function(input, output, session) {
   })
   
   # Cell type annotation logic
-  observeEvent(input$BroadClustering, {
-    req(values$seurat, values$LSI_done)
+  observeEvent(input$findMarkers, {
+    req(values$seurat)
     
     withProgress(message = 'Finding marker genes...', {
       # Find markers for each cluster
-      all_markers <- FindAllMarkers(values$seurat, 
+      all_markers <- FindAllMarkers(values$seurat,
+                                    test.use = "wilcox",
                                     only.pos = TRUE, 
                                     min.pct = 0.3, 
-                                    logfc.threshold = 0.5)
+                                    logfc.threshold = 0.3)
       
       # Store markers
       values$markers <- all_markers %>%
@@ -1365,38 +1436,139 @@ server <- function(input, output, session) {
         top_n(n = input$maxMarkers, wt = avg_log2FC)
       
       values$markers_done <- TRUE
+      
+      # Update the cluster selection dropdown
+      clusters <- sort(unique(as.character(values$markers$cluster)))
+      updateSelectInput(session, "clusterSelect", 
+                        choices = clusters, 
+                        selected = clusters[1])
+      
+      # Update the feature selection dropdown with all marker genes
+      gene_choices <- sort(unique(as.character(values$markers$gene)))
+      updateSelectInput(session, "featureSelect", 
+                        choices = gene_choices, 
+                        selected = gene_choices[1])
+      
+      # Show notification
+      showNotification("Marker genes found successfully", type = "message")
     })
     
-    # Display marker table
+    # Render the marker table for the first cluster initially
     output$markerTable <- renderDT({
-      req(values$markers, values$markers_done)
-      values$markers
-    })
+      req(values$markers, input$clusterSelect)
+      values$markers %>% 
+        filter(cluster == input$clusterSelect) %>%
+        arrange(desc(avg_log2FC)) %>%
+        select(gene, avg_log2FC, pct.1, pct.2, p_val_adj) %>%
+        rename("Gene" = gene, 
+               "Log2 FC" = avg_log2FC, 
+               "% in Cluster" = pct.1, 
+               "% in Other" = pct.2, 
+               "Adj. p-value" = p_val_adj)
+    }, options = list(pageLength = 10, scrollY = "350px", scroller = TRUE))
     
     # Create UI for cell type assignment
     output$cellTypeUI <- renderUI({
       req(values$seurat, values$markers_done)
-      clusters <- levels(values$seurat$seurat_clusters)
+      clusters <- sort(levels(values$seurat$seurat_clusters))
       
-      lapply(clusters, function(cluster) {
+      tagList(
         fluidRow(
-          column(4, paste0("Cluster ", cluster)),
-          column(8, textInput(paste0("label_cluster_", cluster), 
-                              label = NULL, 
-                              value = paste0("Cluster ", cluster)))
+          column(12, 
+                 h4("Assign cell types to clusters", 
+                    style = "margin-bottom: 20px;")
+          )
+        ),
+        fluidRow(
+          lapply(seq_along(clusters), function(i) {
+            cluster <- clusters[i]
+            # Get top markers for this cluster for the label hint
+            top_markers <- values$markers %>% 
+              filter(cluster == !!cluster) %>% 
+              top_n(3, avg_log2FC) %>% 
+              pull(gene) %>% 
+              paste(collapse = ", ")
+            
+            div(
+              style = if(i %% 3 == 0) "clear: both;" else "",
+              column(
+                width = 4,
+                div(
+                  style = "border: 1px solid #ddd; border-radius: 5px; padding: 10px; margin-bottom: 15px; background-color: #f9f9f9;",
+                  strong(paste("Cluster", cluster)),
+                  p(style = "font-size: 0.8em; color: #666;", 
+                    paste("Top markers:", top_markers)),
+                  textInput(
+                    inputId = paste0("label_cluster_", cluster),
+                    label = NULL,
+                    placeholder = "Enter cell type name",
+                    value = ifelse(
+                      is.null(values$seurat$cell_type) || 
+                        !paste0("Cluster ", cluster) %in% unique(values$seurat$cell_type),
+                      "", 
+                      unique(values$seurat$cell_type[values$seurat$seurat_clusters == cluster])
+                    )
+                  )
+                )
+              )
+            )
+          })
         )
-      })
+      )
+    })
+    
+    # Update UMAP visualization
+    output$clusterUMAP <- renderPlot({
+      req(values$seurat)
+      
+      if(input$umapDisplayType == "clusters") {
+        DimPlot(values$seurat, reduction = "umap", group.by = "seurat_clusters", label = TRUE) +
+          theme(legend.position = "right") +
+          ggtitle("Clusters")
+      } else {
+        req(input$featureSelect)
+        FeaturePlot(values$seurat, features = input$featureSelect, 
+                    min.cutoff = "q10", max.cutoff = "q90") +
+          scale_color_viridis_c() +
+          ggtitle(paste("Expression:", input$featureSelect))
+      }
     })
   })
   
+  # 2. Updating marker table based on cluster selection
+  observeEvent(input$clusterSelect, {
+    req(values$markers, values$markers_done)
+    
+    output$markerTable <- renderDT({
+      values$markers %>% 
+        filter(cluster == input$clusterSelect) %>%
+        arrange(desc(avg_log2FC)) %>%
+        select(gene, avg_log2FC, pct.1, pct.2, p_val_adj) %>%
+        rename("Gene" = gene, 
+               "Log2 FC" = avg_log2FC, 
+               "% in Cluster" = pct.1, 
+               "% in Other" = pct.2, 
+               "Adj. p-value" = p_val_adj)
+    }, options = list(pageLength = 10, scrollY = "350px", scroller = TRUE))
+  })
+  
+  # 3. Cell type assignment
   observeEvent(input$assignCellTypes, {
     req(values$seurat, values$markers_done)
     
     withProgress(message = 'Assigning cell types...', {
       # Get cluster IDs and user-defined labels
       clusters <- levels(values$seurat$seurat_clusters)
+      
+      # Check if any labels are empty
       labels <- sapply(clusters, function(cluster) {
-        input[[paste0("label_cluster_", cluster)]]
+        label_value <- input[[paste0("label_cluster_", cluster)]]
+        # Use default if empty
+        if(is.null(label_value) || trimws(label_value) == "") {
+          return(paste0("Cluster ", cluster))
+        } else {
+          return(label_value)
+        }
       })
       
       # Create new identity column
@@ -1405,17 +1577,41 @@ server <- function(input, output, session) {
                                  to = labels)
       values$seurat$cell_type <- new_ids
       
+      # Add metadata about annotation
+      values$seurat@misc$annotation_info <- list(
+        date = Sys.time(),
+        clusters = data.frame(
+          cluster = clusters,
+          label = labels,
+          stringsAsFactors = FALSE
+        )
+      )
+      
       values$annotation_done <- TRUE
+      
+      # Show success notification
+      showNotification("Cell types assigned successfully", type = "message")
     })
     
-    # Plot annotated clusters
-    output$annotatedPlot <- renderPlot({
+    # Update UMAP plot to show cell types
+    output$clusterUMAP <- renderPlot({
       req(values$seurat, values$annotation_done)
-      DimPlot(values$seurat, reduction = tolower(input$reduction), group.by = "cell_type", label = TRUE)
+      
+      # Add option to view by cell type in the display type dropdown
+      updateSelectInput(session, "umapDisplayType",
+                        choices = c("Clusters" = "clusters", 
+                                    "Cell Types" = "celltypes",
+                                    "Gene Expression" = "gene"),
+                        selected = "celltypes")
+      
+      # Show the cell type UMAP
+      DimPlot(values$seurat, reduction = "umap", group.by = "cell_type", label = TRUE) +
+        theme(legend.position = "right") +
+        ggtitle("Assigned Cell Types")
     })
     
-    # Navigate to next tab
-    updateTabItems(session, "tabs", "download")
+    # Navigate to next tab (which will be LSI_2 now)
+    updateTabItems(session, "tabs", "LSI_2")
   })
   
   # Download results logic

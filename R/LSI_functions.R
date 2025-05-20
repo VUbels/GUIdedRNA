@@ -32,34 +32,67 @@ generate_VariableGenes <- function(mat, nvar = 2000, blacklist = NULL){
 
 run_SparseLogX <- function(spmat, logtype="log2", scale=FALSE, scaleFactor=10^4){
   stopifnot(any(logtype == c("log", "log2", "log10")))
-
   
+  # Check if input is a sparse matrix
+  if(!is(spmat, "sparseMatrix")){
+    message("Warning: Converting dense matrix to sparse format for efficiency")
+    spmat <- as(spmat, "sparseMatrix")
+  }
+  
+  # Handle empty matrix case
+  if(length(spmat@x) == 0) {
+    message("Empty matrix detected, returning as is")
+    return(spmat)
+  }
+  
+  # Scale matrix if requested - with safeguards against zero column sums
   if(scale == TRUE){
-    spmat <- t(t(spmat)/Matrix::colSums(spmat)) * scaleFactor
+    colSums_vals <- Matrix::colSums(spmat)
+    
+    # Check for zero column sums to avoid division by zero
+    if(any(colSums_vals == 0)) {
+      message(sprintf("Note: %d columns with zero sums detected; adding small pseudocount", sum(colSums_vals == 0)))
+      colSums_vals[colSums_vals == 0] <- 1e-10
+    }
+    
+    # Scale columns more efficiently with direct manipulation of sparse matrix slots
+    # This avoids creating intermediate matrices
+    i <- spmat@i
+    p <- spmat@p
+    x <- spmat@x
+    
+    # Apply scaling to each column based on column sums
+    for(col in 1:ncol(spmat)) {
+      idx_start <- p[col] + 1
+      idx_end <- p[col + 1]
+      
+      if(idx_start <= idx_end) {
+        col_indices <- idx_start:idx_end
+        x[col_indices] <- (x[col_indices] / colSums_vals[col]) * scaleFactor
+      }
+    }
+    
+    # Reconstruct sparse matrix with scaled values
+    spmat@x <- x
+    
+    # Force garbage collection to free memory
+    invisible(gc())
   }
   
-  if(is(spmat, "sparseMatrix")){
-    matsum <- summary(spmat) # Get the sparse matrix summary
-    if(logtype == "log"){
-      logx <- log(matsum$x + 1) 
-    }else if(logtype == "log2"){
-      logx <- log2(matsum$x + 1) 
-    }else{
-      logx <- log10(matsum$x + 1)
-    }
-    logmat <- sparseMatrix(i = matsum$i, j = matsum$j, # convert back to sparse matrix
-                           x = logx, dims = dim(spmat),
-                           dimnames = dimnames(spmat))
-  }else{
-    if(logtype == "log"){
-      logmat <- log(spmat + 1) 
-    }else if(logtype == "log2"){
-      logmat <- log2(spmat + 1) 
-    }else{
-      logmat <- log10(spmat + 1) 
-    }
+  # Log transform the sparse matrix in place
+  # Operating directly on the non-zero values (x slot)
+  if(logtype == "log") {
+    spmat@x <- log(spmat@x + 1)
+  } else if(logtype == "log2") {
+    spmat@x <- log2(spmat@x + 1) 
+  } else {
+    spmat@x <- log10(spmat@x + 1)
   }
-  return(logmat)
+  
+  # Force garbage collection again
+  invisible(gc())
+  
+  return(spmat)
 }
 
 #' Function to generate a gene blacklist based on user selections.
@@ -265,16 +298,13 @@ process_LSI <- function(seurat_obj,
     clusters <- Idents(seurat_obj)
     send_message(sprintf("Found %d clusters in iteration %d", length(unique(clusters)), i))
     
-    #Runs differential gene analysis on resulting clusters
-    send_message("Finding differentially expressed genes for latest clusters...")
-      
-    seurat_obj <- Seurat::FindAllMarkers(
-      object = seurat_obj,
-      test.use = "wilcox",  #Uses presto for quick DE implementation
-      only.pos = TRUE,
-      min.pct = 30,
-      logfc.threshold = 0.3,
-      group.by = "ident"
+    seurat_obj <- RunUMAP(
+      seurat_obj,
+      reduction = paste0("LSI_iter",length(resolution)), # Use final LSI iteration 
+      dims = nPCs,
+      n.neighbors = umapNeighbors,
+      min.dist = umapMinDist,
+      metric = umapDistMetric
     )
     
     # Store information
@@ -318,34 +348,87 @@ LSI_function <- function(mat, nComponents, binarize = FALSE){
   colSm <- Matrix::colSums(mat)
   rowSm <- Matrix::rowSums(mat)
   
+  # Check for zero row sums and remove those rows
+  if(any(rowSm == 0)) {
+    message(sprintf("Removing %d features with zero counts...", sum(rowSm == 0)))
+    mat <- mat[rowSm > 0, ]
+    rowSm <- rowSm[rowSm > 0]
+  }
+  
   # Calculate TF-IDF
   message(sprintf("Calculating TF-IDF with %s features (terms) and %s cells (documents)...", nrow(mat), ncol(mat)))
   start <- Sys.time()
   scaleTo <- 10^4
-  tf <- t(t(mat) / colSm)
+  
+  # Add a small epsilon to avoid division by zero
+  tf <- t(t(mat) / (colSm + 1e-10))
   idf <- as(ncol(mat) / rowSm, "sparseVector")
   tfidf <- as(Matrix::Diagonal(x=as.vector(idf)), "sparseMatrix") %*% tf
+  
   # Log transform TF-IDF
   tfidf <- run_SparseLogX(tfidf, logtype="log", scale=TRUE, scaleFactor=scaleTo)
+  
+  # Replace any NaN or Inf values
+  if(any(is.na(tfidf@x) | is.infinite(tfidf@x))) {
+    message("Warning: NaN or Inf values detected in TF-IDF matrix. Replacing with zeros...")
+    tfidf@x[is.na(tfidf@x) | is.infinite(tfidf@x)] <- 0
+  }
   
   # Clean up
   rm(tf)
   rm(idf)
   invisible(gc())
   
-  # Calculate SVD for LSI
+  # Calculate SVD for LSI with error handling
   message("Calculating SVD for LSI...")
-  svd <- irlba::irlba(tfidf, nv=nComponents, nu=nComponents)
-  svdDiag <- Matrix::diag(x=svd$d)
-  matSVD <- t(svdDiag %*% t(svd$v))
-  rownames(matSVD) <- colnames(mat)
-  colnames(matSVD) <- paste0("PC", seq_len(ncol(matSVD)))
+  tryCatch({
+    # Check if matrix is suitable for SVD
+    if(any(is.na(tfidf@x)) || any(is.infinite(tfidf@x))) {
+      stop("Matrix contains NA or Inf values")
+    }
+    
+    svd <- irlba::irlba(tfidf, nv=nComponents, nu=nComponents)
+    svdDiag <- Matrix::diag(x=svd$d)
+    matSVD <- t(svdDiag %*% t(svd$v))
+    rownames(matSVD) <- colnames(mat)
+    colnames(matSVD) <- paste0("PC", seq_len(ncol(matSVD)))
+    
+    message(sprintf("LSI complete: %s minutes", round(difftime(Sys.time(), start, units="mins"), 3)))
+  }, error = function(e) {
+    message(paste("Error in SVD calculation:", e$message))
+    message("Using fallback SVD method...")
+    
+    # Convert sparse matrix to regular matrix for prcomp
+    dense_tfidf <- as.matrix(tfidf)
+    
+    # Replace any remaining problematic values
+    dense_tfidf[is.na(dense_tfidf)] <- 0
+    dense_tfidf[is.infinite(dense_tfidf)] <- 0
+    
+    # Use standard PCA as fallback with reduced rank
+    pca_result <- prcomp(t(dense_tfidf), center = TRUE, scale. = FALSE, 
+                         rank. = min(nComponents, min(dim(dense_tfidf))-1))
+    
+    # Create SVD-like output
+    svd <- list(
+      d = pca_result$sdev[1:min(nComponents, length(pca_result$sdev))],
+      u = matrix(0, nrow=nrow(dense_tfidf), ncol=length(pca_result$sdev)),  # Placeholder
+      v = pca_result$rotation
+    )
+    
+    # Create output matrix similar to original function
+    matSVD <- pca_result$x
+    rownames(matSVD) <- colnames(mat)
+    colnames(matSVD) <- paste0("PC", seq_len(ncol(matSVD)))
+    
+    message("Fallback SVD completed successfully")
+  })
   
-  # Return matSVD and svd
-  message(sprintf("LSI complete: %s minutes", round(difftime(Sys.time(), start, units="mins"), 3)))
+  # Return result
   if(is.null(rownames(mat))){
     rownames(mat) <- 1:nrow(mat)
   }
+  
   return(
     list(
       matSVD = matSVD, 

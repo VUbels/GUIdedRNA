@@ -20,6 +20,7 @@ library(org.Hs.eg.db)
 message("Loading global.R file...")
 source("../R/preprocessing_functions.R")
 source("../R/LSI_functions.R")
+source("../R/plotting_functions.R")
 
 # Global message queue - using a hidden environment variable for storage
 .message_env <- new.env()
