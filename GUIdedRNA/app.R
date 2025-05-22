@@ -61,6 +61,10 @@ ui <- dashboardPage(
       
       tags$li(class = "divider", style = "height: 1px; margin: 9px 0; overflow: hidden; background-color: #666;"),
       
+      menuItem("Integrate Results", tabName = "integrate_results", icon = icon("puzzle-piece")),
+      
+      tags$li(class = "divider", style = "height: 1px; margin: 9px 0; overflow: hidden; background-color: #666;"),
+      
       menuItem("Download Results", tabName = "download", icon = icon("download"))
     )
   ),
@@ -93,9 +97,24 @@ ui <- dashboardPage(
       consoleOutput.appendChild(p);
       consoleOutput.scrollTop = consoleOutput.scrollHeight;
     }
-  }",
-      functions = c("appendToConsole", "appendToLSI1_Console")
+  };
+      
+  shinyjs.appendToLSI2_Console = function(message) {
+    var consoleOutput = document.getElementById('lsi2_ConsoleOutput');
+    if(consoleOutput) {
+      var p = document.createElement('p');
+      p.innerHTML = message;
+      p.style.fontSize = '0.75em';
+      p.style.margin = '0';
+      p.style.padding = '2px 0';
+      consoleOutput.appendChild(p);
+      consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    }
+  }",    
+      functions = c("appendToConsole", "appendToLSI1_Console", "appendToLSI2_Console")
     ),
+    
+    
     
     tabItems(
       # Upload Data tab
@@ -300,7 +319,7 @@ ui <- dashboardPage(
                     width = NULL,
                     status = "primary",
                     solidHeader = TRUE,
-                    checkboxGroupInput("blacklist_genes", "Ignore genes for LSI clustering (Not DE analysis)", 
+                    checkboxGroupInput("blacklist_genes_1", "Ignore genes for LSI clustering (Not DE analysis)", 
                                        choices = c("Ignore Mitochondrial Genes" = "blacklist_mitogenes", 
                                                    "Ignore X/Y chomosomal genes" = "blacklist_sexgenes",
                                                    "Ignore Ribosomal genes" = "blacklist_rbgenes"),
@@ -310,31 +329,31 @@ ui <- dashboardPage(
                   ),
                   
                   box(
-                    title = "LSI Parameters",
+                    title = "LSI Round 1 Parameters",
                     width = NULL,
                     status = "primary",
                     solidHeader = TRUE,
                     
-                    numericInput("nVarGenes", "Number of Variable Genes", 
-                                 value = 2000, min = 100, max = 10000, step = 100),
+                    numericInput("nVarGenes_1", "Number of Variable Genes", 
+                                 value = 2000, min = 100, max = 5000, step = 100),
                     
-                    sliderInput("nPCs", "Number of Principal Components", 
-                                value = 25, min = 10, max = 100, step = 5),
+                    sliderInput("nPCs_1", "Number of Principal Components", 
+                                value = 25, min = 5, max = 50, step = 5),
                     
-                    textInput("resolution", "Clustering Resolutions (comma separated)", 
+                    textInput("resolution_1", "Clustering Resolutions (comma separated)", 
                               value = "0.2, 0.4, 0.6"),
                     
-                    textInput("covariates", "Harmony Covariates", 
+                    textInput("covariates_1", "Harmony Covariates", 
                               value = "orig.ident"),
                     
                     # UMAP parameters
-                    numericInput("umapNeighbors", "UMAP Neighbors", 
-                                 value = 50, min = 5, max = 200, step = 5),
+                    numericInput("umapNeighbors_1", "UMAP Neighbors", 
+                                 value = 50, min = 5, max = 100, step = 5),
                     
-                    numericInput("umapMinDist", "UMAP Minimum Distance", 
+                    numericInput("umapMinDist_1", "UMAP Minimum Distance", 
                                  value = 0.5, min = 0.01, max = 0.99, step = 0.01),
                     
-                    selectInput("umapDistMetric", "UMAP Distance Metric",
+                    selectInput("umapDistMetric_1", "UMAP Distance Metric",
                                 choices = c("cosine", "euclidean", "manhattan", "hamming"),
                                 selected = "cosine"),
                     
@@ -470,6 +489,273 @@ ui <- dashboardPage(
               )
       ),
       
+      tabItem(tabName = "LSI_2",
+              fluidRow(
+                column(
+                  width = 4,
+                  height = "900px",
+                  box(
+                    title = "Blacklist Settings",
+                    width = NULL,
+                    status = "primary",
+                    solidHeader = TRUE,
+                    checkboxGroupInput("blacklist_genes_2", "Ignore genes for LSI clustering (Not DE analysis)", 
+                                       choices = c("Ignore Mitochondrial Genes" = "blacklist_mitogenes", 
+                                                   "Ignore X/Y chomosomal genes" = "blacklist_sexgenes",
+                                                   "Ignore Ribosomal genes" = "blacklist_rbgenes"),
+                                       selected = c("blacklist_mitogenes", "blacklist_sexgenes", "blacklist_rbgenes")
+                                       
+                    )
+                  ),
+                  
+                  box(
+                    title = "LSI Round 2 Parameters",
+                    width = NULL,
+                    status = "primary",
+                    solidHeader = TRUE,
+                    
+                    numericInput("nVarGenes_2", "Number of Variable Genes", 
+                                 value = 2000, min = 100, max = 5000, step = 100),
+                    
+                    sliderInput("nPCs_2", "Number of Principal Components", 
+                                value = 15, min = 5, max = 50, step = 5),
+                    
+                    textInput("resolution_2", "Clustering Resolutions (comma separated)", 
+                              value = "0.2, 0.3"),
+                    
+                    textInput("covariates_2", "Harmony Covariates", 
+                              value = "orig.ident"),
+                    
+                    # UMAP parameters
+                    numericInput("umapNeighbors_2", "UMAP Neighbors", 
+                                 value = 35, min = 5, max = 500, step = 5),
+                    
+                    numericInput("umapMinDist_2", "UMAP Minimum Distance", 
+                                 value = 0.4, min = 0.01, max = 0.99, step = 0.01),
+                    
+                    selectInput("umapDistMetric_2", "UMAP Distance Metric",
+                                choices = c("cosine", "euclidean", "manhattan", "hamming"),
+                                selected = "cosine"),
+                    
+                    actionButton("commitLSI_2", "Run LSI - Round 2", 
+                                 class = "btn-success", 
+                                 style = "color: white; width: 100%;")
+                  )
+                ),
+                
+                box(
+                  title = "LSI Round 2 Results",
+                  width = 8,
+                  height = "930px",
+                  div(id = "lsi2_ConsoleOutput", 
+                      style = "white-space: pre-wrap; height: 850px; overflow-y: auto; background-color: #f5f5f5; padding: 1px; font-family: monospace; text-align: left; vertical-align: top;")
+                )
+              )
+      ),
+      
+      # Cell Type Annotation tab
+      tabItem(tabName = "annotate_specific",
+              fluidRow(
+                # Left column - Subset selector and marker analysis
+                column(
+                  width = 4,
+                  # New subset selector box
+                  box(
+                    title = "Subset Selection",
+                    width = NULL,
+                    status = "info",
+                    solidHeader = TRUE,
+                    selectInput("subsetSelector", "Select Cell Type Subset", 
+                                choices = NULL,
+                                width = "100%"),
+                    helpText("Switch between different cell type subsets processed in LSI Round 2")
+                  ),
+                  
+                  box(
+                    title = "Marker Gene Analysis",
+                    width = NULL,
+                    status = "primary",
+                    solidHeader = TRUE,
+                    
+                    sliderInput("maxMarkers_final", "Max Markers per Cluster", 
+                                min = 5, max = 30, value = 15, step = 5),
+                    
+                    div(style = "margin-top: 15px; margin-bottom: 15px;",
+                        actionButton("findMarkers_final", "Find Markers",
+                                     class = "btn-success", 
+                                     style = "color: white; width: 100%;")
+                    )
+                  ),
+                  
+                  box(
+                    title = "Differentially Expressed Genes",
+                    width = NULL,
+                    height = "520px",
+                    status = "primary",
+                    solidHeader = TRUE,
+                    
+                    selectInput("clusterSelect_final", "Select Cluster", 
+                                choices = NULL,
+                                width = "100%"),
+                    
+                    div(style = "height: 340px; overflow-y: auto;",
+                        DTOutput("markerTable_final") %>% withSpinner()
+                    )
+                  )
+                ),
+                
+                # Right column - UMAP visualization
+                column(
+                  width = 8,
+                  box(
+                    title = "Cluster Visualization",
+                    width = NULL,
+                    height = "810px",
+                    status = "primary",
+                    solidHeader = TRUE,
+                    
+                    # Feature selection for UMAP coloring
+                    fluidRow(
+                      column(4, 
+                             selectInput("umapDisplayType_final", "Display Type",
+                                         choices = c("Clusters" = "clusters", 
+                                                     "Gene Expression" = "gene"),
+                                         selected = "clusters",
+                                         width = "100%")
+                      ),
+                      column(4,
+                             selectInput("umapGroupBy_final", "Color By", 
+                                         choices = c("seurat_clusters"), 
+                                         selected = "seurat_clusters",
+                                         width = "100%")
+                      ),
+                      column(4,
+                             selectInput("umapSplitBy_final", "Split By", 
+                                         choices = c("None" = "none"), 
+                                         selected = "none",
+                                         width = "100%")
+                      )
+                    ),
+                    
+                    # Conditional UI for gene selection
+                    conditionalPanel(
+                      condition = "input.umapDisplayType_final == 'gene'",
+                      fluidRow(
+                        column(12,
+                               selectizeInput("featureSelect_final", "Select Gene", 
+                                              choices = NULL,
+                                              options = list(
+                                                placeholder = 'Type to search genes',
+                                                onInitialize = I('function() { this.setValue(""); }')
+                                              ),
+                                              width = "100%")
+                        )
+                      )
+                    ),
+                    
+                    # UMAP plot
+                    div(style = "height: 550px; width: 100%; margin-top: 10px; overflow: hidden;",
+                        plotOutput("clusterUMAP_final", height = "550px", width = "100%") %>% withSpinner()
+                    )
+                  )
+                )
+              ),
+              # Cell type assignment UI for final clustering
+              fluidRow(
+                column(12,
+                       box(
+                         title = "Final Cell Type Assignment",
+                         width = NULL,
+                         status = "primary",
+                         solidHeader = TRUE,
+                         uiOutput("cellTypeUI_final") %>% withSpinner()
+                       )
+                )
+              )
+      ),
+      
+      # New Integration Results Tab
+      tabItem(tabName = "integrate_results",
+              fluidRow(
+                box(
+                  title = "Integration Controls",
+                  width = 12,
+                  status = "primary",
+                  solidHeader = TRUE,
+                  
+                  fluidRow(
+                    column(6,
+                           h4("Integrate Final Cell Type Annotations"),
+                           p("This will combine all final cell type annotations from the individual subsets 
+                       back into the original Seurat object as a new metadata column."),
+                           actionButton("integrateResults", "Integrate Final Annotations",
+                                        class = "btn-success", 
+                                        style = "color: white; width: 100%;")
+                    ),
+                    column(6,
+                           h4("Integration Status"),
+                           textOutput("integrationStatus"),
+                           br(),
+                           conditionalPanel(
+                             condition = "output.integrationStatus",
+                             downloadButton("downloadFinalResults", "Download Final Results",
+                                            class = "btn-primary",
+                                            style = "width: 100%;")
+                           )
+                    )
+                  )
+                )
+              ),
+              
+              fluidRow(
+                # Integration Summary
+                column(6,
+                       box(
+                         title = "Integration Summary",
+                         width = NULL,
+                         status = "info",
+                         solidHeader = TRUE,
+                         height = "600px",
+                         verbatimTextOutput("integrationSummary")
+                       )
+                ),
+                
+                # Final UMAP visualization
+                column(6,
+                       box(
+                         title = "Final Integrated Results",
+                         width = NULL,
+                         status = "info", 
+                         solidHeader = TRUE,
+                         height = "600px",
+                         plotOutput("finalIntegratedUMAP", height = "550px") %>% withSpinner()
+                       )
+                )
+              ),
+              
+              fluidRow(
+                box(
+                  title = "Export Options",
+                  width = 12,
+                  status = "warning",
+                  solidHeader = TRUE,
+                  
+                  checkboxGroupInput("finalExportItems", "Select Items to Export:",
+                                     choices = c("Final Seurat Object with Integrated Annotations (RDS)" = "final_rds",
+                                                 "Final Cell Type Metadata (CSV)" = "final_meta",
+                                                 "Subset-specific Marker Genes (CSV)" = "subset_markers",
+                                                 "Integration Summary Report (HTML)" = "integration_report")),
+                  
+                  downloadButton("downloadIntegratedData", "Download Selected Items",
+                                 class = "btn-warning",
+                                 style = "color: white; width: 100%;")
+                )
+              )
+      ),
+      
+      
+      
+      
       # Download Results tab
       tabItem(tabName = "download",
               fluidRow(
@@ -500,7 +786,9 @@ server <- function(input, output, session) {
   # Initialize log text reactive values
   log_text <- reactiveVal("")
   lsi1_log_text <- reactiveVal("")
+  lsi2_log_text <- reactiveVal("")
   
+  #Preprocessing Message Logger
   display_ui_message <- function(msg) {
     # Function to display messages in the preprocessing UI console
     # Update the log text
@@ -511,7 +799,7 @@ server <- function(input, output, session) {
     js$appendToConsole(msg)
   }
   
-  # 4. Create a new function specifically for LSI messages:
+  #LSI_1 Message Logger
   display_lsi1_message <- function(msg) {
     # Function to display messages in the LSI1 UI console
     # Update the log text (if you want to share the log between consoles)
@@ -520,6 +808,17 @@ server <- function(input, output, session) {
     
     # Send to JavaScript console using the LSI1-specific function
     js$appendToLSI1_Console(msg)
+  }
+  
+  #LSI_2 Message Logger
+  display_lsi2_message <- function(msg) {
+    # Function to display messages in the LSI1 UI console
+    # Update the log text (if you want to share the log between consoles)
+    current <- isolate(lsi2_log_text())
+    lsi2_log_text(paste0(current, msg, "\n"))
+    
+    # Send to JavaScript console using the LSI1-specific function
+    js$appendToLSI2_Console(msg)
   }
   
   # Create an observer that checks for new messages
@@ -544,6 +843,10 @@ server <- function(input, output, session) {
     display_lsi1_message(msg)
   }, envir = .GlobalEnv)
   
+  assign("send_lsi2_message", function(msg) {
+    display_lsi2_message(msg)
+  }, envir = .GlobalEnv)
+  
   # Render log text
   output$preprocessingLog <- renderText({
     log_text()
@@ -552,12 +855,19 @@ server <- function(input, output, session) {
   values <- reactiveValues(
     seurat = NULL,
     original_seurat = NULL,
+    seurat_list = NULL,  
+    original_seurat_list = NULL,  
     qc_done = FALSE,
     preprocess_done = FALSE,
     LSI1_done = FALSE,
     broad_cluster_done = FALSE,
     LSI2_done = FALSE,
-    specific_cluster_done = FALSE
+    specific_cluster_done = FALSE,
+    subset_objects = NULL,
+    subset_markers = NULL,
+    integration_summary = NULL,
+    markers = NULL,  
+    added_columns = NULL
   )
   
   # Define volumes in a platform-agnostic way
@@ -1372,14 +1682,14 @@ server <- function(input, output, session) {
     })
     
     # Get selected parameters
-    selected_blacklist <- input$blacklist_genes
-    nVarGenes <- input$nVarGenes
-    nPCs <- input$nPCs
-    resolution <- as.numeric(unlist(strsplit(gsub(" ", "", input$resolution), ",")))
-    covariates <- unlist(strsplit(gsub(" ", "", input$covariates), ","))
-    umapNeighbors <- input$umapNeighbors
-    umapMinDist <- input$umapMinDist
-    umapDistMetric <- input$umapDistMetric
+    selected_blacklist <- input$blacklist_genes_1
+    nVarGenes <- input$nVarGenes_1
+    nPCs <- input$nPCs_1
+    resolution <- as.numeric(unlist(strsplit(gsub(" ", "", input$resolution_1), ",")))
+    covariates <- unlist(strsplit(gsub(" ", "", input$covariates_1), ","))
+    umapNeighbors <- input$umapNeighbors_1
+    umapMinDist <- input$umapMinDist_1
+    umapDistMetric <- input$umapDistMetric_1
 
     # Log normalization on sparse matrix
     send_lsi1_message("Log normalization of sparse data matrix")
@@ -1428,7 +1738,7 @@ server <- function(input, output, session) {
     values$LSI1_done <- TRUE
     
     # Navigate to next tab
-    updateTabItems(session, "tabs", "BroadClustering")  
+    updateTabItems(session, "tabs", "annotate_broad")  
   })
   
   
@@ -1818,6 +2128,594 @@ server <- function(input, output, session) {
                       selected = clusters[1])
   })
   
+  
+  # LSI Round 2 Server Logic
+  observeEvent(input$commitLSI_2, {
+    req(values$seurat)
+    
+    # Check if cell type assignments exist
+    if(!"cell_type" %in% colnames(values$seurat@meta.data)) {
+      showNotification("Please complete initial clustering and cell type assignment first", type = "error")
+      return()
+    }
+    
+    # Reset the log text
+    lsi2_log_text("")
+    
+    # Get unique cell types (excluding any that might be "Cluster X" format)
+    cell_types <- unique(values$seurat$cell_type)
+    cell_types <- cell_types[!grepl("^Cluster \\d+$", cell_types)]
+    
+    if(length(cell_types) == 0) {
+      showNotification("No custom cell types found. Please assign cell types in Initial Clustering first.", type = "error")
+      return()
+    }
+    
+    send_lsi2_message(sprintf("Starting LSI Round 2 for %d cell types...", length(cell_types)))
+    
+    # Get selected parameters for LSI Round 2
+    selected_blacklist_2 <- input$blacklist_genes_2
+    nVarGenes_2 <- input$nVarGenes_2
+    nPCs_2 <- input$nPCs_2
+    resolution_2 <- as.numeric(unlist(strsplit(gsub(" ", "", input$resolution_2), ",")))
+    covariates_2 <- unlist(strsplit(gsub(" ", "", input$covariates_2), ","))
+    umapNeighbors_2 <- input$umapNeighbors_2
+    umapMinDist_2 <- input$umapMinDist_2
+    umapDistMetric_2 <- input$umapDistMetric_2
+    
+    # Initialize list to store subset objects
+    subset_objects <- list()
+    
+    withProgress(message = 'Processing cell type subsets...', value = 0, {
+      
+      for(i in seq_along(cell_types)) {
+        cell_type <- cell_types[i]
+        
+        incProgress(1/length(cell_types), detail = paste("Processing", cell_type))
+        send_lsi2_message(sprintf("Processing subset %d/%d: %s", i, length(cell_types), cell_type))
+        
+        # Create subset for this cell type
+        subset_cells <- colnames(values$seurat)[values$seurat$cell_type == cell_type]
+        
+        if(length(subset_cells) < 50) {
+          send_lsi2_message(sprintf("  - Skipping %s: insufficient cells (%d)", cell_type, length(subset_cells)))
+          next
+        }
+        
+        send_lsi2_message(sprintf("  - Creating subset with %d cells", length(subset_cells)))
+        seurat_subset <- subset(values$seurat, cells = subset_cells)
+        
+        # Get raw counts for this subset
+        tryCatch({
+          rawCounts_subset <- Seurat::GetAssayData(object = seurat_subset, layer = "counts")
+          
+          # Generate blacklist for this subset
+          blacklist.genes_subset <- generate_GeneBlacklist(rawCounts_subset, selected_blacklist_2, 
+                                                           function(msg) send_lsi2_message(paste("  -", msg)))
+          
+          send_lsi2_message(sprintf("  - Running LSI on %s subset...", cell_type))
+          
+          # Run LSI on subset
+          lsi_results_subset <- process_LSI(
+            seurat_obj = seurat_subset,
+            rawCounts = rawCounts_subset,
+            blacklist.genes = blacklist.genes_subset,
+            nVarGenes = nVarGenes_2,
+            resolution = resolution_2,
+            nPCs = nPCs_2,
+            covariates = covariates_2,
+            umapNeighbors = umapNeighbors_2,
+            umapMinDist = umapMinDist_2,
+            umapDistMetric = umapDistMetric_2,
+            send_message = function(msg) send_lsi2_message(paste("    -", msg))
+          )
+          
+          # Store the processed subset
+          subset_objects[[cell_type]] <- lsi_results_subset$seurat_obj
+          
+          send_lsi2_message(sprintf("  - Completed LSI for %s", cell_type))
+          
+        }, error = function(e) {
+          send_lsi2_message(sprintf("  - Error processing %s: %s", cell_type, e$message))
+        })
+      }
+    })
+    
+    # Store subset objects in reactive values
+    values$subset_objects <- subset_objects
+    values$LSI2_done <- TRUE
+    
+    send_lsi2_message(sprintf("LSI Round 2 complete! Processed %d subsets.", length(subset_objects)))
+    
+    # Navigate to final clustering tab
+    updateTabItems(session, "tabs", "annotate_specific")
+  })
+  
+  # Final Clustering Logic - Add subset selector observer
+  observeEvent(values$subset_objects, {
+    req(values$subset_objects)
+    
+    subset_names <- names(values$subset_objects)
+    updateSelectInput(session, "subsetSelector", 
+                      choices = subset_names, 
+                      selected = subset_names[1])
+  })
+  
+  # Reactive to get current subset
+  current_subset <- reactive({
+    req(values$subset_objects, input$subsetSelector)
+    values$subset_objects[[input$subsetSelector]]
+  })
+  
+  # Observer to update UI components when subset changes
+  observeEvent(input$subsetSelector, {
+    req(current_subset())
+    
+    # Get all features for gene selection from current subset
+    all_features <- rownames(current_subset())
+    
+    # Update feature selection with genes from current subset
+    updateSelectizeInput(session, "featureSelect_final",
+                         choices = all_features,
+                         server = TRUE)
+    
+    # Get metadata columns from current subset
+    meta_columns <- colnames(current_subset()@meta.data)
+    relevant_columns <- c("seurat_clusters", "orig.ident")
+    
+    # Add cell_type if it exists
+    if("cell_type" %in% meta_columns) {
+      relevant_columns <- c(relevant_columns, "cell_type")
+    }
+    
+    # Add any custom columns
+    if(!is.null(values$added_columns)) {
+      relevant_columns <- c(relevant_columns, values$added_columns)
+    }
+    
+    # Filter to only include columns that exist
+    relevant_columns <- relevant_columns[relevant_columns %in% meta_columns]
+    
+    # Update dropdowns for final clustering
+    updateSelectInput(session, "umapGroupBy_final", 
+                      choices = relevant_columns, 
+                      selected = "seurat_clusters")
+    
+    # Create split by options
+    split_options <- c("None" = "none")
+    for(col in relevant_columns) {
+      if(col != "seurat_clusters") {
+        split_options[col] <- col
+      }
+    }
+    
+    updateSelectInput(session, "umapSplitBy_final", 
+                      choices = split_options, 
+                      selected = "none")
+  })
+  
+  # Find markers for final clustering
+  observeEvent(input$findMarkers_final, {
+    req(current_subset())
+    
+    withProgress(message = paste('Finding markers for', input$subsetSelector, '...'), {
+      # Find markers for current subset
+      all_markers <- FindAllMarkers(current_subset(),
+                                    test.use = "wilcox",
+                                    only.pos = TRUE, 
+                                    min.pct = 0.3, 
+                                    logfc.threshold = 0.3)
+      
+      # Store markers for current subset
+      if(is.null(values$subset_markers)) {
+        values$subset_markers <- list()
+      }
+      
+      values$subset_markers[[input$subsetSelector]] <- all_markers %>%
+        group_by(cluster) %>%
+        dplyr::top_n(n = input$maxMarkers_final, wt = avg_log2FC)
+      
+      # Update cluster selection dropdown
+      clusters <- sort(unique(as.character(all_markers$cluster)))
+      updateSelectInput(session, "clusterSelect_final", 
+                        choices = clusters, 
+                        selected = clusters[1])
+      
+      # Initialize cell_type_final column if it doesn't exist
+      if(!"cell_type_final" %in% colnames(current_subset()@meta.data)) {
+        values$subset_objects[[input$subsetSelector]]$cell_type_final <- 
+          paste0("Cluster ", current_subset()$seurat_clusters)
+      }
+      
+      showNotification(paste("Marker genes found for", input$subsetSelector), type = "message")
+    })
+  })
+  
+  # Render marker table for final clustering
+  output$markerTable_final <- renderDT({
+    req(values$subset_markers, input$subsetSelector, input$clusterSelect_final)
+    
+    if(is.null(values$subset_markers[[input$subsetSelector]])) {
+      return(NULL)
+    }
+    
+    marker_genes <- values$subset_markers[[input$subsetSelector]] %>% 
+      filter(cluster == input$clusterSelect_final) %>%
+      arrange(desc(avg_log2FC))
+    
+    display_table <- data.frame(
+      Gene = marker_genes$gene,
+      "Log2 FC" = round(marker_genes$avg_log2FC, 3),
+      "Adj. p-value" = sprintf("%.2f", marker_genes$p_val_adj),
+      stringsAsFactors = FALSE
+    )
+    
+    DT::datatable(
+      display_table,
+      options = list(
+        dom = 't',
+        scrollY = "350px",
+        scroller = TRUE,
+        paging = FALSE,
+        ordering = TRUE,
+        columnDefs = list(
+          list(targets = 0, className = "dt-left"),
+          list(targets = 1:2, className = "dt-right")
+        )
+      ),
+      rownames = FALSE,
+      selection = "none",
+      class = "compact stripe"
+    )
+  })
+  
+  # UMAP visualization for final clustering
+  output$clusterUMAP_final <- renderPlot({
+    req(current_subset())
+    
+    if(!"umap" %in% names(current_subset()@reductions)) {
+      return(
+        ggplot() + 
+          annotate("text", x = 0.5, y = 0.5, label = "UMAP not computed yet. Please run LSI Round 2 first.") +
+          theme_void() +
+          theme(
+            plot.title = element_text(size = 16, hjust = 0.5),
+            aspect.ratio = 1
+          )
+      )
+    }
+    
+    common_theme <- theme(
+      legend.position = "right",
+      aspect.ratio = 1,
+      plot.margin = margin(10, 10, 10, 10),
+      axis.text = element_text(size = 10),
+      axis.title = element_text(size = 12),
+      legend.text = element_text(size = 10),
+      plot.title = element_text(size = 14, hjust = 0.5)
+    )
+    
+    if(input$umapDisplayType_final == "clusters") {
+      if(is.null(input$umapSplitBy_final) || input$umapSplitBy_final == "none") {
+        p <- DimPlot(current_subset(), 
+                     reduction = "umap", 
+                     group.by = input$umapGroupBy_final, 
+                     pt.size = 0.5,
+                     label = TRUE,
+                     label.size = 3) +
+          common_theme +
+          ggtitle(paste(input$subsetSelector, "- Colored by:", input$umapGroupBy_final))
+      } else {
+        p <- DimPlot(current_subset(), 
+                     reduction = "umap", 
+                     group.by = input$umapGroupBy_final, 
+                     split.by = input$umapSplitBy_final,
+                     pt.size = 0.5,
+                     label = TRUE,
+                     label.size = 3) +
+          common_theme +
+          ggtitle(paste(input$subsetSelector, "- Colored by:", input$umapGroupBy_final, "| Split by:", input$umapSplitBy_final))
+      }
+    } else {
+      req(input$featureSelect_final)
+      if(is.null(input$featureSelect_final) || input$featureSelect_final == "" || 
+         !input$featureSelect_final %in% rownames(current_subset())) {
+        p <- ggplot() + 
+          annotate("text", x = 0.5, y = 0.5, label = "Selected gene not found in dataset") +
+          theme_void() +
+          common_theme
+      } else if(is.null(input$umapSplitBy_final) || input$umapSplitBy_final == "none") {
+        p <- FeaturePlot(current_subset(), 
+                         features = input$featureSelect_final, 
+                         min.cutoff = "q10", 
+                         max.cutoff = "q90",
+                         pt.size = 0.5) +
+          scale_color_viridis_c() +
+          common_theme +
+          ggtitle(paste(input$subsetSelector, "- Expression:", input$featureSelect_final))
+      } else {
+        tryCatch({
+          split_factor <- current_subset()@meta.data[[input$umapSplitBy_final]]
+          unique_splits <- unique(split_factor)
+          
+          plot_list <- lapply(unique_splits, function(split_val) {
+            cells_subset <- colnames(current_subset())[split_factor == split_val]
+            
+            FeaturePlot(current_subset(), 
+                        features = input$featureSelect_final,
+                        cells = cells_subset,
+                        min.cutoff = "q10", 
+                        max.cutoff = "q90",
+                        pt.size = 0.5) +
+              scale_color_viridis_c() +
+              common_theme +
+              ggtitle(paste(split_val))
+          })
+          
+          p <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
+          p <- cowplot::plot_grid(
+            cowplot::ggdraw() + 
+              cowplot::draw_label(paste(input$subsetSelector, "- Expression:", input$featureSelect_final, "| Split by:", input$umapSplitBy_final), 
+                                  fontface = 'bold', size = 14),
+            p,
+            ncol = 1,
+            rel_heights = c(0.1, 1)
+          )
+        }, error = function(e) {
+          p <- ggplot() + 
+            annotate("text", x = 0.5, y = 0.5, label = paste("Error creating split plot:", e$message)) +
+            theme_void() +
+            common_theme
+        })
+      }
+    }
+    
+    return(p)
+  }, height = 550, width = 700)
+  
+  # Cell type UI for final clustering
+  output$cellTypeUI_final <- renderUI({
+    req(current_subset())
+    
+    clusters <- sort(as.numeric(as.character(levels(Idents(current_subset())))))
+    
+    tagList(
+      fluidRow(
+        column(12, 
+               h4(paste("Assign final cell types to", input$subsetSelector, "clusters"), 
+                  style = "margin-bottom: 20px;")
+        )
+      ),
+      fluidRow(
+        column(12,
+               div(
+                 style = "max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 15px; background-color: #f9f9f9;",
+                 lapply(clusters, function(cluster) {
+                   # Get top markers for this cluster
+                   top_markers <- ""
+                   if(!is.null(values$subset_markers) && !is.null(values$subset_markers[[input$subsetSelector]])) {
+                     top_markers <- values$subset_markers[[input$subsetSelector]] %>% 
+                       filter(cluster == !!cluster) %>% 
+                       dplyr::top_n(3, avg_log2FC) %>% 
+                       pull(gene) %>% 
+                       paste(collapse = ", ")
+                   }
+                   
+                   div(
+                     style = "margin-bottom: 8px; display: flex; align-items: center;",
+                     div(
+                       style = "flex: 0 0 150px; font-weight: bold;",
+                       paste("Cluster", cluster)
+                     ),
+                     div(
+                       style = "flex: 0 0 250px; font-size: 0.8em; color: #666;",
+                       if(top_markers != "") paste("Top markers:", top_markers) else ""
+                     ),
+                     div(
+                       style = "flex: 1;",
+                       textInput(
+                         inputId = paste0("label_cluster_final_", input$subsetSelector, "_", cluster),
+                         label = NULL,
+                         placeholder = "Enter specific cell type name",
+                         value = ifelse(
+                           is.null(current_subset()$cell_type_final) || 
+                             !any(current_subset()$seurat_clusters == cluster),
+                           "", 
+                           unique(current_subset()$cell_type_final[current_subset()$seurat_clusters == cluster])
+                         ),
+                         width = "100%"
+                       )
+                     )
+                   )
+                 })
+               )
+        )
+      ),
+      fluidRow(
+        column(12,
+               div(
+                 style = "margin-top: 20px;",
+                 actionButton("applyLabels_final", "Apply Final Cell Type Labels",
+                              class = "btn-success", 
+                              style = "color: white; width: 100%;")
+               )
+        )
+      )
+    )
+  })
+  
+  # Apply final cell type labels
+  observeEvent(input$applyLabels_final, {
+    req(current_subset(), input$subsetSelector)
+    
+    withProgress(message = paste('Applying labels to', input$subsetSelector, '...'), {
+      # Get current clusters for this subset
+      clusters <- sort(levels(Idents(current_subset())))
+      
+      # Initialize cell_type_final column if it doesn't exist
+      if(!"cell_type_final" %in% colnames(current_subset()@meta.data)) {
+        values$subset_objects[[input$subsetSelector]]$cell_type_final <- 
+          paste0("Cluster ", current_subset()$seurat_clusters)
+      }
+      
+      # Apply new cell type labels
+      for(cluster in clusters) {
+        input_id <- paste0("label_cluster_final_", input$subsetSelector, "_", cluster)
+        label_value <- input[[input_id]]
+        
+        # Only update if not empty
+        if(!is.null(label_value) && nchar(trimws(label_value)) > 0) {
+          values$subset_objects[[input$subsetSelector]]$cell_type_final[
+            values$subset_objects[[input$subsetSelector]]$seurat_clusters == cluster] <- label_value
+        }
+      }
+      
+      showNotification(paste("Final cell type labels applied to", input$subsetSelector), type = "message")
+    })
+  })
+  
+  
+  # Integration Results Logic
+  observeEvent(input$integrateResults, {
+    req(values$seurat, values$subset_objects)
+    
+    withProgress(message = 'Integrating final cell type annotations...', {
+      
+      # Initialize the final cell type column in the original object
+      values$seurat$cell_type_final <- "Unassigned"
+      
+      # Counter for assigned cells
+      total_assigned <- 0
+      
+      # Iterate through each subset and transfer labels
+      for(subset_name in names(values$subset_objects)) {
+        subset_obj <- values$subset_objects[[subset_name]]
+        
+        # Check if final cell types exist for this subset
+        if("cell_type_final" %in% colnames(subset_obj@meta.data)) {
+          
+          # Get cell barcodes and their final annotations
+          subset_cells <- colnames(subset_obj)
+          subset_labels <- subset_obj$cell_type_final
+          
+          # Find matching cells in original object
+          matching_cells <- intersect(subset_cells, colnames(values$seurat))
+          
+          if(length(matching_cells) > 0) {
+            # Transfer labels to original object
+            cell_indices <- match(matching_cells, colnames(values$seurat))
+            label_indices <- match(matching_cells, subset_cells)
+            
+            values$seurat$cell_type_final[cell_indices] <- subset_labels[label_indices]
+            total_assigned <- total_assigned + length(matching_cells)
+          }
+        }
+      }
+      
+      # Summary statistics
+      total_cells <- ncol(values$seurat)
+      assigned_pct <- round(100 * total_assigned / total_cells, 2)
+      
+      # Show summary
+      values$integration_summary <- list(
+        total_cells = total_cells,
+        assigned_cells = total_assigned,
+        unassigned_cells = total_cells - total_assigned,
+        assigned_percentage = assigned_pct,
+        final_cell_types = table(values$seurat$cell_type_final)
+      )
+      
+      showNotification(
+        paste("Integration complete!", total_assigned, "cells assigned (", assigned_pct, "%)"), 
+        type = "message"
+      )
+    })
+  })
+  
+  # Display integration summary
+  output$integrationSummary <- renderPrint({
+    req(values$integration_summary)
+    
+    cat("Final Cell Type Integration Summary\n")
+    cat("==================================\n\n")
+    cat(paste("Total cells in dataset:", values$integration_summary$total_cells, "\n"))
+    cat(paste("Cells with final annotations:", values$integration_summary$assigned_cells, "\n"))
+    cat(paste("Unassigned cells:", values$integration_summary$unassigned_cells, "\n"))
+    cat(paste("Assignment percentage:", values$integration_summary$assigned_percentage, "%\n\n"))
+    
+    cat("Final cell type distribution:\n")
+    print(values$integration_summary$final_cell_types)
+  })
+  
+  # Display final UMAP with integrated results
+  output$finalIntegratedUMAP <- renderPlot({
+    req(values$seurat, values$integration_summary)
+    
+    if(!"umap" %in% names(values$seurat@reductions)) {
+      return(
+        ggplot() + 
+          annotate("text", x = 0.5, y = 0.5, label = "UMAP not available in original object") +
+          theme_void()
+      )
+    }
+    
+    DimPlot(values$seurat, 
+            reduction = "umap", 
+            group.by = "cell_type_final", 
+            pt.size = 0.3,
+            label = TRUE,
+            label.size = 3,
+            repel = TRUE) +
+      theme(
+        legend.position = "right",
+        aspect.ratio = 1,
+        plot.title = element_text(size = 14, hjust = 0.5)
+      ) +
+      ggtitle("Final Integrated Cell Type Annotations")
+  }, height = 600, width = 800)
+  
+
+  # Enhanced download handler for comprehensive export
+  output$downloadFinalResults <- downloadHandler(
+    filename = function() {
+      paste("integrated_results_", Sys.Date(), ".zip", sep = "")
+    },
+    content = function(file) {
+      temp_dir <- tempdir()
+      
+      # Save the integrated Seurat object
+      if(!is.null(values$seurat) && "cell_type_final" %in% colnames(values$seurat@meta.data)) {
+        saveRDS(values$seurat, file.path(temp_dir, "integrated_seurat_object.rds"))
+      }
+      
+      # Save integration summary
+      if(!is.null(values$integration_summary)) {
+        capture.output(
+          {
+            cat("Final Cell Type Integration Summary\n")
+            cat("==================================\n\n")
+            cat(paste("Total cells in dataset:", values$integration_summary$total_cells, "\n"))
+            cat(paste("Cells with final annotations:", values$integration_summary$assigned_cells, "\n"))
+            cat(paste("Unassigned cells:", values$integration_summary$unassigned_cells, "\n"))
+            cat(paste("Assignment percentage:", values$integration_summary$assigned_percentage, "%\n\n"))
+            cat("Final cell type distribution:\n")
+            print(values$integration_summary$final_cell_types)
+          },
+          file = file.path(temp_dir, "integration_summary.txt")
+        )
+      }
+      
+      # Save final metadata
+      if(!is.null(values$seurat)) {
+        write.csv(values$seurat@meta.data, file.path(temp_dir, "final_metadata.csv"))
+      }
+      
+      # Zip all files
+      files_to_zip <- list.files(temp_dir, pattern = "\\.rds$|\\.csv$|\\.txt$", full.names = TRUE)
+      zip(file, files_to_zip)
+    }
+  )
+  
   # Download results logic
   output$downloadData <- downloadHandler(
     filename = function() {
@@ -1861,8 +2759,11 @@ server <- function(input, output, session) {
       zip(file, files_to_zip)
     }
   )
-}
+  
+}  
 
+  
+  
 # Run the application
 shinyApp(ui = ui, server = server, options = list(
   width = 1200,
