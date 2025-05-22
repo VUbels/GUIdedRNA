@@ -298,15 +298,6 @@ process_LSI <- function(seurat_obj,
     clusters <- Idents(seurat_obj)
     send_message(sprintf("Found %d clusters in iteration %d", length(unique(clusters)), i))
     
-    seurat_obj <- RunUMAP(
-      seurat_obj,
-      reduction = paste0("LSI_iter",length(resolution)), # Use final LSI iteration 
-      dims = nPCs,
-      n.neighbors = umapNeighbors,
-      min.dist = umapMinDist,
-      metric = umapDistMetric
-    )
-    
     # Store information
     lsiOut[[reducName]] <- list(
       lsiMat = LSIi$matSVD,
@@ -320,6 +311,20 @@ process_LSI <- function(seurat_obj,
     
     send_message(sprintf("Completed LSI round %d", i))
   }
+  
+  # Run UMAP using the last LSI iteration
+  lastIteration <- paste0("LSI_iter", length(resolution))
+  send_message(sprintf("Running UMAP on final LSI iteration (%s)...", lastIteration))
+  
+  # Run UMAP on the final iteration
+  seurat_obj <- RunUMAP(
+    seurat_obj,
+    reduction = lastIteration, # Use the variable with the last iteration name
+    dims = 1:nPCs,
+    n.neighbors = umapNeighbors,
+    min.dist = umapMinDist,
+    metric = umapDistMetric
+  )
   
   # Return results
   return(list(

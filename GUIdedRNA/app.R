@@ -285,7 +285,7 @@ ui <- dashboardPage(
                   height = "650px",
                   # Add these style attributes for text alignment
                   div(id = "consoleOutput", 
-                      style = "white-space: pre-wrap; height: 600px; overflow-y: auto; background-color: #f5f5f5; padding: 1px; font-family: monospace; text-align: left; vertical-align: top;")
+                      style = "white-space: pre-wrap; height: 575px; overflow-y: auto; background-color: #f5f5f5; padding: 1px; font-family: monospace; text-align: left; vertical-align: top;")
                 )
               )
             ),
@@ -369,7 +369,7 @@ ui <- dashboardPage(
                     
                     # Slider instead of numeric input for max markers
                     sliderInput("maxMarkers", "Max Markers per Cluster", 
-                                min = 0, max = 30, value = 15, step = 1),
+                                min = 5, max = 30, value = 15, step = 5),
                     
                     # Action button with consistent styling
                     div(style = "margin-top: 15px; margin-bottom: 15px;",
@@ -382,7 +382,7 @@ ui <- dashboardPage(
                   box(
                     title = "Differentially Expressed Genes",
                     width = NULL, # Full width of column
-                    height = "500px",
+                    height = "580px",
                     status = "primary",
                     solidHeader = TRUE,
                     
@@ -391,7 +391,7 @@ ui <- dashboardPage(
                                 choices = NULL, # Will be populated dynamically
                                 width = "100%"),
                     
-                    # Marker gene table with scroll
+                    # Marker gene table with scroll - simplified to show only genes and stats
                     div(style = "height: 400px; overflow-y: auto;",
                         DTOutput("markerTable") %>% withSpinner()
                     )
@@ -404,55 +404,68 @@ ui <- dashboardPage(
                   box(
                     title = "Cluster Visualization",
                     width = NULL, # Full width of column
-                    height = "657px", # Match left column height
+                    height = "810px", # Match left column height
                     status = "primary",
                     solidHeader = TRUE,
                     
                     # Feature selection for UMAP coloring
                     fluidRow(
-                      column(6, 
+                      column(4, 
                              selectInput("umapDisplayType", "Display Type",
                                          choices = c("Clusters" = "clusters", 
                                                      "Gene Expression" = "gene"),
                                          selected = "clusters",
                                          width = "100%")
                       ),
-                      column(6,
-                             # Conditional UI for gene selection
-                             conditionalPanel(
-                               condition = "input.umapDisplayType == 'gene'",
-                               selectInput("featureSelect", "Select Feature", 
-                                           choices = NULL, # Will be populated dynamically
-                                           width = "100%")
-                             )
+                      column(4,
+                             # Color By selection - always shown
+                             selectInput("umapGroupBy", "Color By", 
+                                         choices = c("seurat_clusters"), 
+                                         selected = "seurat_clusters",
+                                         width = "100%")
+                      ),
+                      column(4,
+                             # Split By selection - always shown
+                             selectInput("umapSplitBy", "Split By", 
+                                         choices = c("None" = "none"), 
+                                         selected = "none",
+                                         width = "100%")
                       )
                     ),
                     
-                    # UMAP plot with spinner
-                    div(style = "height: 550px;",
-                        plotOutput("clusterUMAP", height = "100%") %>% withSpinner()
+                    # Conditional UI for gene selection - shown in its own row when gene expression is selected
+                    conditionalPanel(
+                      condition = "input.umapDisplayType == 'gene'",
+                      fluidRow(
+                        column(12,
+                               selectizeInput("featureSelect", "Select Gene", 
+                                              choices = NULL,
+                                              options = list(
+                                                placeholder = 'Type to search genes',
+                                                onInitialize = I('function() { this.setValue(""); }')
+                                              ),
+                                              width = "100%")
+                        )
+                      )
+                    ),
+                    
+                    # UMAP plot with spinner - fixed aspect ratio and contained in its own div
+                    div(style = "height: 550px; width: 100%; margin-top: 10px; overflow: hidden;",
+                        plotOutput("clusterUMAP", height = "550px", width = "100%") %>% withSpinner()
                     )
                   )
                 )
               ),
-              
-              # Bottom section - Cell type assignment
+              # Cell type assignment UI
               fluidRow(
-                box(
-                  title = "Cell Type Assignment",
-                  width = 12,
-                  status = "success",
-                  solidHeader = TRUE,
-                  
-                  # Cell type assignment UI (will be rendered dynamically)
-                  uiOutput("cellTypeUI"),
-                  
-                  # Action button for assigning cell types
-                  div(style = "margin-top: 20px;",
-                      actionButton("assignCellTypes", "Assign Cell Types",
-                                   class = "btn-success", 
-                                   style = "color: white; width: 20%;")
-                  )
+                column(12,
+                       box(
+                         title = "Cell Type Assignment",
+                         width = NULL,
+                         status = "primary",
+                         solidHeader = TRUE,
+                         uiOutput("cellTypeUI") %>% withSpinner()
+                       )
                 )
               )
       ),
@@ -1418,7 +1431,8 @@ server <- function(input, output, session) {
     updateTabItems(session, "tabs", "BroadClustering")  
   })
   
-  # Cell type annotation logic
+  
+  # Render the marker table for differentially expressed genes - completely stripped down
   observeEvent(input$findMarkers, {
     req(values$seurat)
     
@@ -1433,7 +1447,7 @@ server <- function(input, output, session) {
       # Store markers
       values$markers <- all_markers %>%
         group_by(cluster) %>%
-        top_n(n = input$maxMarkers, wt = avg_log2FC)
+        dplyr::top_n(n = input$maxMarkers, wt = avg_log2FC)
       
       values$markers_done <- TRUE
       
@@ -1443,175 +1457,365 @@ server <- function(input, output, session) {
                         choices = clusters, 
                         selected = clusters[1])
       
-      # Update the feature selection dropdown with all marker genes
-      gene_choices <- sort(unique(as.character(values$markers$gene)))
-      updateSelectInput(session, "featureSelect", 
-                        choices = gene_choices, 
-                        selected = gene_choices[1])
+      # Initialize cell_type column if it doesn't exist
+      if(!"cell_type" %in% colnames(values$seurat@meta.data)) {
+        values$seurat$cell_type <- paste0("Cluster ", values$seurat$seurat_clusters)
+      }
       
       # Show notification
       showNotification("Marker genes found successfully", type = "message")
     })
-    
-    # Render the marker table for the first cluster initially
-    output$markerTable <- renderDT({
-      req(values$markers, input$clusterSelect)
-      values$markers %>% 
-        filter(cluster == input$clusterSelect) %>%
-        arrange(desc(avg_log2FC)) %>%
-        select(gene, avg_log2FC, pct.1, pct.2, p_val_adj) %>%
-        rename("Gene" = gene, 
-               "Log2 FC" = avg_log2FC, 
-               "% in Cluster" = pct.1, 
-               "% in Other" = pct.2, 
-               "Adj. p-value" = p_val_adj)
-    }, options = list(pageLength = 10, scrollY = "350px", scroller = TRUE))
-    
-    # Create UI for cell type assignment
-    output$cellTypeUI <- renderUI({
-      req(values$seurat, values$markers_done)
-      clusters <- sort(levels(values$seurat$seurat_clusters))
-      
-      tagList(
-        fluidRow(
-          column(12, 
-                 h4("Assign cell types to clusters", 
-                    style = "margin-bottom: 20px;")
-          )
-        ),
-        fluidRow(
-          lapply(seq_along(clusters), function(i) {
-            cluster <- clusters[i]
-            # Get top markers for this cluster for the label hint
-            top_markers <- values$markers %>% 
-              filter(cluster == !!cluster) %>% 
-              top_n(3, avg_log2FC) %>% 
-              pull(gene) %>% 
-              paste(collapse = ", ")
-            
-            div(
-              style = if(i %% 3 == 0) "clear: both;" else "",
-              column(
-                width = 4,
-                div(
-                  style = "border: 1px solid #ddd; border-radius: 5px; padding: 10px; margin-bottom: 15px; background-color: #f9f9f9;",
-                  strong(paste("Cluster", cluster)),
-                  p(style = "font-size: 0.8em; color: #666;", 
-                    paste("Top markers:", top_markers)),
-                  textInput(
-                    inputId = paste0("label_cluster_", cluster),
-                    label = NULL,
-                    placeholder = "Enter cell type name",
-                    value = ifelse(
-                      is.null(values$seurat$cell_type) || 
-                        !paste0("Cluster ", cluster) %in% unique(values$seurat$cell_type),
-                      "", 
-                      unique(values$seurat$cell_type[values$seurat$seurat_clusters == cluster])
-                    )
-                  )
-                )
-              )
-            )
-          })
-        )
-      )
-    })
-    
-    # Update UMAP visualization
-    output$clusterUMAP <- renderPlot({
-      req(values$seurat)
-      
-      if(input$umapDisplayType == "clusters") {
-        DimPlot(values$seurat, reduction = "umap", group.by = "seurat_clusters", label = TRUE) +
-          theme(legend.position = "right") +
-          ggtitle("Clusters")
-      } else {
-        req(input$featureSelect)
-        FeaturePlot(values$seurat, features = input$featureSelect, 
-                    min.cutoff = "q10", max.cutoff = "q90") +
-          scale_color_viridis_c() +
-          ggtitle(paste("Expression:", input$featureSelect))
-      }
-    })
   })
-  
-  # 2. Updating marker table based on cluster selection
-  observeEvent(input$clusterSelect, {
-    req(values$markers, values$markers_done)
+
+  # Observer to initialize UI components when Seurat object is loaded
+  observeEvent(values$seurat, {
+    req(values$seurat)
     
-    output$markerTable <- renderDT({
-      values$markers %>% 
-        filter(cluster == input$clusterSelect) %>%
-        arrange(desc(avg_log2FC)) %>%
-        select(gene, avg_log2FC, pct.1, pct.2, p_val_adj) %>%
-        rename("Gene" = gene, 
-               "Log2 FC" = avg_log2FC, 
-               "% in Cluster" = pct.1, 
-               "% in Other" = pct.2, 
-               "Adj. p-value" = p_val_adj)
-    }, options = list(pageLength = 10, scrollY = "350px", scroller = TRUE))
-  })
-  
-  # 3. Cell type assignment
-  observeEvent(input$assignCellTypes, {
-    req(values$seurat, values$markers_done)
+    # Get all features for gene selection - INDEPENDENT of marker analysis
+    all_features <- rownames(values$seurat)
     
-    withProgress(message = 'Assigning cell types...', {
-      # Get cluster IDs and user-defined labels
-      clusters <- levels(values$seurat$seurat_clusters)
-      
-      # Check if any labels are empty
-      labels <- sapply(clusters, function(cluster) {
-        label_value <- input[[paste0("label_cluster_", cluster)]]
-        # Use default if empty
-        if(is.null(label_value) || trimws(label_value) == "") {
-          return(paste0("Cluster ", cluster))
-        } else {
-          return(label_value)
+    # Update feature selection with ALL genes from the dataset
+    updateSelectizeInput(session, "featureSelect",
+                         choices = all_features,
+                         server = TRUE)
+    
+    # Get all metadata columns
+    meta_columns <- colnames(values$seurat@meta.data)
+    relevant_columns <- c("seurat_clusters", "orig.ident")
+    
+    # Add cell_type if it exists
+    if("cell_type" %in% meta_columns) {
+      relevant_columns <- c(relevant_columns, "cell_type")
+    }
+    
+    # Add any custom columns from sample information tab
+    if(!is.null(values$added_columns)) {
+      relevant_columns <- c(relevant_columns, values$added_columns)
+    }
+    
+    # Filter to only include columns that exist
+    relevant_columns <- relevant_columns[relevant_columns %in% meta_columns]
+    
+    # Update the Color By dropdown
+    updateSelectInput(session, "umapGroupBy", 
+                      choices = relevant_columns, 
+                      selected = "seurat_clusters")
+    
+    # Create split by options with "None" option first
+    split_options <- c("None" = "none")
+    
+    # Add orig.ident if it exists
+    if("orig.ident" %in% meta_columns) {
+      split_options <- c(split_options, "orig.ident" = "orig.ident")
+    }
+    
+    # Add cell_type if it exists
+    if("cell_type" %in% meta_columns) {
+      split_options <- c(split_options, "cell_type" = "cell_type")
+    }
+    
+    # Add any custom columns for split.by
+    if(!is.null(values$added_columns)) {
+      for(col in values$added_columns) {
+        if(col %in% meta_columns) {
+          split_options[col] <- col
         }
-      })
+      }
+    }
+    
+    # Update the Split By dropdown
+    updateSelectInput(session, "umapSplitBy", 
+                      choices = split_options, 
+                      selected = "none")
+  })
+  
+  #
+  output$markerTable <- renderDT({
+    req(values$markers, input$clusterSelect)
+    
+    # Create a fresh dataframe with only the three needed columns
+    marker_genes <- values$markers %>% 
+      filter(cluster == input$clusterSelect) %>%
+      arrange(desc(avg_log2FC))
+    
+    # Create a new dataframe with properly formatted columns
+    display_table <- data.frame(
+      Gene = marker_genes$gene,
+      "Log2 FC" = round(marker_genes$avg_log2FC, 3),
+      "Adj. p-value" = sprintf("%.2f", marker_genes$p_val_adj),
+      stringsAsFactors = FALSE
+    )
+    
+    # Use the DT package explicitly to have more control
+    DT::datatable(
+      display_table,
+      options = list(
+        dom = 't',  # table only, no search/pagination UI
+        scrollY = "350px",
+        scroller = TRUE,
+        paging = FALSE,
+        ordering = TRUE,
+        columnDefs = list(
+          list(targets = 0, className = "dt-left"),  # Gene column left aligned
+          list(targets = 1:2, className = "dt-right") # Numeric columns right aligned
+        )
+      ),
+      rownames = FALSE,  # No row names/indices
+      selection = "none", # No row selection
+      class = "compact stripe" # Styling
+    )
+  })
+  
+  observeEvent(input$applyLabels, {
+    req(values$seurat)
+    
+    withProgress(message = 'Applying cell type labels...', {
+      # Get current clusters
+      clusters <- sort(levels(Idents(values$seurat)))
       
-      # Create new identity column
-      new_ids <- plyr::mapvalues(values$seurat$seurat_clusters, 
-                                 from = clusters, 
-                                 to = labels)
-      values$seurat$cell_type <- new_ids
+      # Initialize cell_type column if it doesn't exist
+      if(!"cell_type" %in% colnames(values$seurat@meta.data)) {
+        values$seurat$cell_type <- paste0("Cluster ", values$seurat$seurat_clusters)
+      }
       
-      # Add metadata about annotation
-      values$seurat@misc$annotation_info <- list(
-        date = Sys.time(),
-        clusters = data.frame(
-          cluster = clusters,
-          label = labels,
-          stringsAsFactors = FALSE
+      # Apply new cell type labels
+      for(cluster in clusters) {
+        input_id <- paste0("label_cluster_", cluster)
+        label_value <- input[[input_id]]
+        
+        # Only update if not empty
+        if(!is.null(label_value) && nchar(trimws(label_value)) > 0) {
+          values$seurat$cell_type[values$seurat$seurat_clusters == cluster] <- label_value
+        }
+      }
+      
+      # Update the group.by dropdown to include cell_type
+      meta_columns <- colnames(values$seurat@meta.data)
+      relevant_columns <- c("seurat_clusters", "orig.ident", "cell_type")
+      if(!is.null(values$added_columns)) {
+        relevant_columns <- c(relevant_columns, values$added_columns)
+      }
+      relevant_columns <- relevant_columns[relevant_columns %in% meta_columns]
+      
+      # Update both dropdowns
+      updateSelectInput(session, "umapGroupBy", 
+                        choices = relevant_columns, 
+                        selected = "cell_type")
+      
+      # Update split by options to include cell_type
+      split_options <- c("None" = "none")
+      for(col in relevant_columns) {
+        if(col != "seurat_clusters") {  # Don't include seurat_clusters in split options
+          split_options[col] <- col
+        }
+      }
+      
+      updateSelectInput(session, "umapSplitBy", 
+                        choices = split_options, 
+                        selected = "none")
+      
+      # Show notification
+      showNotification("Cell type labels applied successfully", type = "message")
+    })
+  }) 
+  
+  output$cellTypeUI <- renderUI({
+    req(values$seurat)
+    clusters <- sort(as.numeric(as.character(levels(Idents(values$seurat)))))
+    
+    tagList(
+      fluidRow(
+        column(12, 
+               h4("Assign cell types to clusters", 
+                  style = "margin-bottom: 20px;")
+        )
+      ),
+      fluidRow(
+        column(12,
+               div(
+                 style = "max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 15px; background-color: #f9f9f9;",
+                 lapply(clusters, function(cluster) {
+                   # Get top markers for this cluster for the label hint
+                   top_markers <- ""
+                   if(!is.null(values$markers)) {
+                     top_markers <- values$markers %>% 
+                       filter(cluster == !!cluster) %>% 
+                       dplyr::top_n(3, avg_log2FC) %>% 
+                       pull(gene) %>% 
+                       paste(collapse = ", ")
+                   }
+                   
+                   div(
+                     style = "margin-bottom: 8px; display: flex; align-items: center;",
+                     div(
+                       style = "flex: 0 0 150px; font-weight: bold;",
+                       paste("Cluster", cluster)
+                     ),
+                     div(
+                       style = "flex: 0 0 250px; font-size: 0.8em; color: #666;",
+                       if(top_markers != "") paste("Top markers:", top_markers) else ""
+                     ),
+                     div(
+                       style = "flex: 1;",
+                       textInput(
+                         inputId = paste0("label_cluster_", cluster),
+                         label = NULL,
+                         placeholder = "Enter cell type name",
+                         value = ifelse(
+                           is.null(values$seurat$cell_type) || 
+                             !any(values$seurat$seurat_clusters == cluster),
+                           "", 
+                           unique(values$seurat$cell_type[values$seurat$seurat_clusters == cluster])
+                         ),
+                         width = "100%"
+                       )
+                     )
+                   )
+                 })
+               )
+        )
+      ),
+      # Add apply button to save cell type assignments
+      fluidRow(
+        column(12,
+               div(
+                 style = "margin-top: 20px;",
+                 actionButton("applyLabels", "Apply Cell Type Labels",
+                              class = "btn-success", 
+                              style = "color: white; width: 100%;")
+               )
         )
       )
-      
-      values$annotation_done <- TRUE
-      
-      # Show success notification
-      showNotification("Cell types assigned successfully", type = "message")
-    })
+    )
+  })
+  
+  # Update UMAP visualization - this is the main fix
+  output$clusterUMAP <- renderPlot({
+    req(values$seurat)
     
-    # Update UMAP plot to show cell types
-    output$clusterUMAP <- renderPlot({
-      req(values$seurat, values$annotation_done)
-      
-      # Add option to view by cell type in the display type dropdown
-      updateSelectInput(session, "umapDisplayType",
-                        choices = c("Clusters" = "clusters", 
-                                    "Cell Types" = "celltypes",
-                                    "Gene Expression" = "gene"),
-                        selected = "celltypes")
-      
-      # Show the cell type UMAP
-      DimPlot(values$seurat, reduction = "umap", group.by = "cell_type", label = TRUE) +
-        theme(legend.position = "right") +
-        ggtitle("Assigned Cell Types")
-    })
+    # Check if UMAP reduction exists
+    if(!"umap" %in% names(values$seurat@reductions)) {
+      return(
+        ggplot() + 
+          annotate("text", x = 0.5, y = 0.5, label = "UMAP not computed yet. Please run LSI first.") +
+          theme_void() +
+          theme(
+            plot.title = element_text(size = 16, hjust = 0.5),
+            aspect.ratio = 1
+          )
+      )
+    }
     
-    # Navigate to next tab (which will be LSI_2 now)
-    updateTabItems(session, "tabs", "LSI_2")
+    # Define common theme elements for consistent plotting
+    common_theme <- theme(
+      legend.position = "right",
+      aspect.ratio = 1,
+      plot.margin = margin(10, 10, 10, 10),
+      axis.text = element_text(size = 10),
+      axis.title = element_text(size = 12),
+      legend.text = element_text(size = 10),
+      plot.title = element_text(size = 14, hjust = 0.5)
+    )
+    
+    if(input$umapDisplayType == "clusters") {
+      # For cluster visualization
+      if(is.null(input$umapSplitBy) || input$umapSplitBy == "none") {
+        # No splitting
+        p <- DimPlot(values$seurat, 
+                     reduction = "umap", 
+                     group.by = input$umapGroupBy, 
+                     pt.size = 0.5,
+                     label = TRUE,
+                     label.size = 3) +
+          common_theme +
+          ggtitle(paste("Colored by:", input$umapGroupBy))
+      } else {
+        # With split.by
+        p <- DimPlot(values$seurat, 
+                     reduction = "umap", 
+                     group.by = input$umapGroupBy, 
+                     split.by = input$umapSplitBy,
+                     pt.size = 0.5,
+                     label = TRUE,
+                     label.size = 3) +
+          common_theme +
+          ggtitle(paste("Colored by:", input$umapGroupBy, "| Split by:", input$umapSplitBy))
+      }
+    } else {
+      # For gene expression
+      req(input$featureSelect)
+      if(is.null(input$featureSelect) || input$featureSelect == "" || 
+         !input$featureSelect %in% rownames(values$seurat)) {
+        # Return an error plot if feature not found
+        p <- ggplot() + 
+          annotate("text", x = 0.5, y = 0.5, label = "Selected gene not found in dataset") +
+          theme_void() +
+          common_theme
+      } else if(is.null(input$umapSplitBy) || input$umapSplitBy == "none") {
+        # Gene expression without splitting
+        p <- FeaturePlot(values$seurat, 
+                         features = input$featureSelect, 
+                         min.cutoff = "q10", 
+                         max.cutoff = "q90",
+                         pt.size = 0.5) +
+          scale_color_viridis_c() +
+          common_theme +
+          ggtitle(paste("Expression:", input$featureSelect))
+      } else {
+        # Gene expression with splitting
+        tryCatch({
+          # Get the split factor
+          split_factor <- values$seurat@meta.data[[input$umapSplitBy]]
+          unique_splits <- unique(split_factor)
+          
+          # Create individual plots for each split
+          plot_list <- lapply(unique_splits, function(split_val) {
+            # Get cells for this split
+            cells_subset <- colnames(values$seurat)[split_factor == split_val]
+            
+            FeaturePlot(values$seurat, 
+                        features = input$featureSelect,
+                        cells = cells_subset,
+                        min.cutoff = "q10", 
+                        max.cutoff = "q90",
+                        pt.size = 0.5) +
+              scale_color_viridis_c() +
+              common_theme +
+              ggtitle(paste(split_val))
+          })
+          
+          # Combine the plots
+          p <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
+          
+          # Add an overall title
+          p <- cowplot::plot_grid(
+            cowplot::ggdraw() + 
+              cowplot::draw_label(paste("Expression:", input$featureSelect, "| Split by:", input$umapSplitBy), 
+                                  fontface = 'bold', size = 14),
+            p,
+            ncol = 1,
+            rel_heights = c(0.1, 1)
+          )
+        }, error = function(e) {
+          p <- ggplot() + 
+            annotate("text", x = 0.5, y = 0.5, label = paste("Error creating split plot:", e$message)) +
+            theme_void() +
+            common_theme
+        })
+      }
+    }
+    
+    # Return the plot
+    return(p)
+  }, height = 550, width = 700) # Fixed dimensions to maintain aspect ratio
+  
+  # Add this observer to update dropdowns when markers are found
+  observeEvent(values$markers, {
+    req(values$markers)
+    clusters <- sort(as.numeric(as.character(unique(values$markers$cluster))))
+    updateSelectInput(session, "clusterSelect", 
+                      choices = clusters, 
+                      selected = clusters[1])
   })
   
   # Download results logic
