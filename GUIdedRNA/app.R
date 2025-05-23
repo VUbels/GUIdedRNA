@@ -178,11 +178,12 @@ ui <- dashboardPage(
                   title = "Sample Information Manager",
                   width = 12,
                   solidHeader = TRUE,
-                  
+                  status = "primary",
                   fluidRow(
                     # Column 1: Display original identities from all objects
                     column(
                       width = 4,
+                      status = "primary",
                       div(
                         class = "panel panel-default",
                         div(class = "panel-heading", h4("Original Sample IDs")),
@@ -197,6 +198,7 @@ ui <- dashboardPage(
                     # Column 2: Add new sample attributes
                     column(
                       width = 8,
+                      status = "primary",
                       div(
                         class = "panel panel-default",
                         div(class = "panel-heading", h4("Create New Sample Attributes")),
@@ -471,6 +473,14 @@ ui <- dashboardPage(
                     # UMAP plot with spinner - fixed aspect ratio and contained in its own div
                     div(style = "height: 550px; width: 100%; margin-top: 10px; overflow: hidden;",
                         plotOutput("clusterUMAP", height = "550px", width = "100%") %>% withSpinner()
+                    ),
+                    
+                    # Download button positioned at bottom right
+                    div(style = "position: absolute; bottom: 10px; right: 15px; z-index: 1000;",
+                        actionButton("downloadUMAP_initial", "Download Figure",
+                                     class = "btn-info btn-sm",
+                                     style = "color: white; font-size: 12px;",
+                                     icon = icon("download"))
                     )
                   )
                 )
@@ -563,7 +573,7 @@ ui <- dashboardPage(
                   box(
                     title = "Subset Selection",
                     width = NULL,
-                    status = "info",
+                    status = "primary",
                     solidHeader = TRUE,
                     selectInput("subsetSelector", "Select Cell Type Subset", 
                                 choices = NULL,
@@ -581,7 +591,7 @@ ui <- dashboardPage(
                                 min = 5, max = 30, value = 15, step = 5),
                     
                     div(style = "margin-top: 15px; margin-bottom: 15px;",
-                        actionButton("findMarkers_final", "Find Markers",
+                        actionButton("findAllMarkersAtOnce", "Calculate All Subset Markers",
                                      class = "btn-success", 
                                      style = "color: white; width: 100%;")
                     )
@@ -656,6 +666,14 @@ ui <- dashboardPage(
                     # UMAP plot
                     div(style = "height: 550px; width: 100%; margin-top: 10px; overflow: hidden;",
                         plotOutput("clusterUMAP_final", height = "550px", width = "100%") %>% withSpinner()
+                    ),
+                    
+                    # Download button positioned at bottom right
+                    div(style = "position: absolute; bottom: 10px; right: 15px; z-index: 1000;",
+                        actionButton("downloadUMAP_final", "Download Figure",
+                                     class = "btn-info btn-sm",
+                                     style = "color: white; font-size: 12px;",
+                                     icon = icon("download"))
                     )
                   )
                 )
@@ -684,27 +702,16 @@ ui <- dashboardPage(
                   solidHeader = TRUE,
                   
                   fluidRow(
-                    column(6,
+                    column(12,
                            h4("Integrate Final Cell Type Annotations"),
                            p("This will combine all final cell type annotations from the individual subsets 
                        back into the original Seurat object as a new metadata column."),
                            actionButton("integrateResults", "Integrate Final Annotations",
                                         class = "btn-success", 
                                         style = "color: white; width: 100%;")
-                    ),
-                    column(6,
-                           h4("Integration Status"),
-                           textOutput("integrationStatus"),
-                           br(),
-                           conditionalPanel(
-                             condition = "output.integrationStatus",
-                             downloadButton("downloadFinalResults", "Download Final Results",
-                                            class = "btn-primary",
-                                            style = "width: 100%;")
-                           )
+                        )
+                      )
                     )
-                  )
-                )
               ),
               
               fluidRow(
@@ -713,7 +720,7 @@ ui <- dashboardPage(
                        box(
                          title = "Integration Summary",
                          width = NULL,
-                         status = "info",
+                         status = "primary",
                          solidHeader = TRUE,
                          height = "600px",
                          verbatimTextOutput("integrationSummary")
@@ -725,30 +732,11 @@ ui <- dashboardPage(
                        box(
                          title = "Final Integrated Results",
                          width = NULL,
-                         status = "info", 
+                         status = "primary", 
                          solidHeader = TRUE,
                          height = "600px",
                          plotOutput("finalIntegratedUMAP", height = "550px") %>% withSpinner()
                        )
-                )
-              ),
-              
-              fluidRow(
-                box(
-                  title = "Export Options",
-                  width = 12,
-                  status = "warning",
-                  solidHeader = TRUE,
-                  
-                  checkboxGroupInput("finalExportItems", "Select Items to Export:",
-                                     choices = c("Final Seurat Object with Integrated Annotations (RDS)" = "final_rds",
-                                                 "Final Cell Type Metadata (CSV)" = "final_meta",
-                                                 "Subset-specific Marker Genes (CSV)" = "subset_markers",
-                                                 "Integration Summary Report (HTML)" = "integration_report")),
-                  
-                  downloadButton("downloadIntegratedData", "Download Selected Items",
-                                 class = "btn-warning",
-                                 style = "color: white; width: 100%;")
                 )
               )
       ),
@@ -760,17 +748,25 @@ ui <- dashboardPage(
       tabItem(tabName = "download",
               fluidRow(
                 box(
-                  title = "Download Options",
+                  title = "Final Integrated Results",
                   width = 12,
-                  checkboxGroupInput("downloadItems", "Select Items to Download:",
-                                     choices = c("Processed Seurat Object (RDS)" = "rds",
-                                                 "Cell Metadata (CSV)" = "meta",
-                                                 "Marker Genes (CSV)" = "markers",
-                                                 "Dimensionality Reduction Coordinates (CSV)" = "dimred",
-                                                 "Analysis Report (HTML)" = "report")),
-                  downloadButton("downloadData", "Download Selected Items")
-                )
-              )
+                  status = "primary",
+                  solidHeader = TRUE,
+                  
+                  checkboxGroupInput("finalExportItems", "Select Final Results to Export:",
+                                     choices = c("Processed Annotated Integrated Seurat Object (RDS)" = "final_rds",
+                                                 "Processed Count Matrix (MTX)" = "count_matrix",
+                                                 "Cell Type Metadata (CSV)" = "final_meta",
+                                                 "Subset-specific Marker Genes (CSV)" = "subset_markers",
+                                                 "Dimensionality Reduction Coordinates (CSV)" = "dimred_coords",
+                                                 "Integration Summary Report (HTML)" = "integration_report")),
+                  
+                  actionButton("downloadIntegratedData", "Save Results to Output Directory",
+                               class = "btn-primary",
+                               style = "color: white; width: 100%;")
+                  
+          )
+        )
       )
     )
   )
@@ -2034,9 +2030,9 @@ server <- function(input, output, session) {
         p <- DimPlot(values$seurat, 
                      reduction = "umap", 
                      group.by = input$umapGroupBy, 
-                     pt.size = 0.5,
+                     pt.size = 0.8,
                      label = TRUE,
-                     label.size = 3) +
+                     label.size = 5) +
           common_theme +
           ggtitle(paste("Colored by:", input$umapGroupBy))
       } else {
@@ -2045,9 +2041,9 @@ server <- function(input, output, session) {
                      reduction = "umap", 
                      group.by = input$umapGroupBy, 
                      split.by = input$umapSplitBy,
-                     pt.size = 0.5,
+                     pt.size = 0.8,
                      label = TRUE,
-                     label.size = 3) +
+                     label.size = 5) +
           common_theme +
           ggtitle(paste("Colored by:", input$umapGroupBy, "| Split by:", input$umapSplitBy))
       }
@@ -2067,8 +2063,9 @@ server <- function(input, output, session) {
                          features = input$featureSelect, 
                          min.cutoff = "q10", 
                          max.cutoff = "q90",
-                         pt.size = 0.5) +
-          scale_color_viridis_c() +
+                         pt.size = 0.8) +
+          scale_color_gradient(low = "#00bfc4", high = "#f8766d", na.value = "grey50",
+                                name = "Expression") +
           common_theme +
           ggtitle(paste("Expression:", input$featureSelect))
       } else {
@@ -2088,8 +2085,9 @@ server <- function(input, output, session) {
                         cells = cells_subset,
                         min.cutoff = "q10", 
                         max.cutoff = "q90",
-                        pt.size = 0.5) +
-              scale_color_viridis_c() +
+                        pt.size = 0.8) +
+              scale_color_gradient(low = "#00bfc4", high = "#f8766d", na.value = "grey50",
+                                   name = "Expression") +
               common_theme +
               ggtitle(paste(split_val))
           })
@@ -2292,43 +2290,109 @@ server <- function(input, output, session) {
     updateSelectInput(session, "umapSplitBy_final", 
                       choices = split_options, 
                       selected = "none")
-  })
-  
-  # Find markers for final clustering
-  observeEvent(input$findMarkers_final, {
-    req(current_subset())
     
-    withProgress(message = paste('Finding markers for', input$subsetSelector, '...'), {
-      # Find markers for current subset
-      all_markers <- FindAllMarkers(current_subset(),
-                                    test.use = "wilcox",
-                                    only.pos = TRUE, 
-                                    min.pct = 0.3, 
-                                    logfc.threshold = 0.3)
-      
-      # Store markers for current subset
-      if(is.null(values$subset_markers)) {
-        values$subset_markers <- list()
-      }
-      
-      values$subset_markers[[input$subsetSelector]] <- all_markers %>%
-        group_by(cluster) %>%
-        dplyr::top_n(n = input$maxMarkers_final, wt = avg_log2FC)
-      
-      # Update cluster selection dropdown
-      clusters <- sort(unique(as.character(all_markers$cluster)))
+    # Update cluster selection dropdown if markers exist for this subset
+    if(!is.null(values$subset_markers) && !is.null(values$subset_markers[[input$subsetSelector]])) {
+      clusters <- sort(unique(as.character(values$subset_markers[[input$subsetSelector]]$cluster)))
       updateSelectInput(session, "clusterSelect_final", 
                         choices = clusters, 
                         selected = clusters[1])
+    } else {
+      # Clear cluster selection if no markers calculated yet
+      updateSelectInput(session, "clusterSelect_final", 
+                        choices = character(0), 
+                        selected = NULL)
+    }
+  })
+  
+  # Find markers for final clustering
+  observeEvent(input$findAllMarkersAtOnce, {
+    req(values$subset_objects)
+    
+    # Check if we have subset objects
+    if(length(values$subset_objects) == 0) {
+      showNotification("No subset objects found. Please complete LSI Round 2 first.", type = "error")
+      return()
+    }
+    
+    # Initialize the subset_markers list
+    values$subset_markers <- list()
+    
+    withProgress(message = 'Calculating markers for all subsets...', value = 0, {
       
-      # Initialize cell_type_final column if it doesn't exist
-      if(!"cell_type_final" %in% colnames(current_subset()@meta.data)) {
-        values$subset_objects[[input$subsetSelector]]$cell_type_final <- 
-          paste0("Cluster ", current_subset()$seurat_clusters)
+      subset_names <- names(values$subset_objects)
+      
+      for(i in seq_along(subset_names)) {
+        subset_name <- subset_names[i]
+        subset_obj <- values$subset_objects[[subset_name]]
+        
+        incProgress(1/length(subset_names), 
+                    detail = paste("Finding markers for", subset_name, 
+                                   paste0("(", i, "/", length(subset_names), ")")))
+        
+        # Check if subset has enough cells and clusters
+        n_cells <- ncol(subset_obj)
+        n_clusters <- length(unique(subset_obj$seurat_clusters))
+        
+        if(n_cells < 50) {
+          showNotification(paste("Skipping", subset_name, ": insufficient cells (", n_cells, ")"), 
+                           type = "warning")
+          next
+        }
+        
+        if(n_clusters < 2) {
+          showNotification(paste("Skipping", subset_name, ": insufficient clusters (", n_clusters, ")"), 
+                           type = "warning")
+          next
+        }
+        
+        tryCatch({
+          # Find all markers for this subset
+          all_markers <- FindAllMarkers(subset_obj,
+                                        test.use = "wilcox",
+                                        only.pos = TRUE, 
+                                        min.pct = 0.3, 
+                                        logfc.threshold = 0.3,
+                                        verbose = FALSE)  # Suppress verbose output
+          
+          # Store top markers per cluster
+          values$subset_markers[[subset_name]] <- all_markers %>%
+            group_by(cluster) %>%
+            dplyr::top_n(n = input$maxMarkers_final, wt = avg_log2FC) %>%
+            arrange(cluster, desc(avg_log2FC))
+          
+          # Initialize cell_type_final column if it doesn't exist
+          if(!"cell_type_final" %in% colnames(subset_obj@meta.data)) {
+            values$subset_objects[[subset_name]]$cell_type_final <- 
+              paste0("Cluster ", subset_obj$seurat_clusters)
+          }
+          
+        }, error = function(e) {
+          showNotification(paste("Error finding markers for", subset_name, ":", e$message), 
+                           type = "warning")
+        })
       }
       
-      showNotification(paste("Marker genes found for", input$subsetSelector), type = "message")
+      # Update the cluster selection dropdown for the current subset
+      if(length(values$subset_markers) > 0 && !is.null(input$subsetSelector)) {
+        current_subset_name <- input$subsetSelector
+        if(!is.null(values$subset_markers[[current_subset_name]])) {
+          clusters <- sort(unique(as.character(values$subset_markers[[current_subset_name]]$cluster)))
+          updateSelectInput(session, "clusterSelect_final", 
+                            choices = clusters, 
+                            selected = clusters[1])
+        }
+      }
     })
+    
+    # Show completion message
+    successful_subsets <- length(values$subset_markers)
+    total_subsets <- length(values$subset_objects)
+    
+    showNotification(
+      paste("Marker calculation complete!", successful_subsets, "of", total_subsets, "subsets processed"), 
+      type = "message"
+    )
   })
   
   # Render marker table for final clustering
@@ -2400,9 +2464,9 @@ server <- function(input, output, session) {
         p <- DimPlot(current_subset(), 
                      reduction = "umap", 
                      group.by = input$umapGroupBy_final, 
-                     pt.size = 0.5,
+                     pt.size = 0.8,
                      label = TRUE,
-                     label.size = 3) +
+                     label.size = 5) +
           common_theme +
           ggtitle(paste(input$subsetSelector, "- Colored by:", input$umapGroupBy_final))
       } else {
@@ -2410,9 +2474,9 @@ server <- function(input, output, session) {
                      reduction = "umap", 
                      group.by = input$umapGroupBy_final, 
                      split.by = input$umapSplitBy_final,
-                     pt.size = 0.5,
+                     pt.size = 0.8,
                      label = TRUE,
-                     label.size = 3) +
+                     label.size = 5) +
           common_theme +
           ggtitle(paste(input$subsetSelector, "- Colored by:", input$umapGroupBy_final, "| Split by:", input$umapSplitBy_final))
       }
@@ -2429,8 +2493,9 @@ server <- function(input, output, session) {
                          features = input$featureSelect_final, 
                          min.cutoff = "q10", 
                          max.cutoff = "q90",
-                         pt.size = 0.5) +
-          scale_color_viridis_c() +
+                         pt.size = 0.8) +
+          scale_color_gradient(low = "#00bfc4", high = "#f8766d", na.value = "grey50",
+                               name = "Expression") +
           common_theme +
           ggtitle(paste(input$subsetSelector, "- Expression:", input$featureSelect_final))
       } else {
@@ -2446,8 +2511,9 @@ server <- function(input, output, session) {
                         cells = cells_subset,
                         min.cutoff = "q10", 
                         max.cutoff = "q90",
-                        pt.size = 0.5) +
-              scale_color_viridis_c() +
+                        pt.size = 0.8) +
+              scale_color_gradient(low = "#00bfc4", high = "#f8766d", na.value = "grey50",
+                                   name = "Expression") +
               common_theme +
               ggtitle(paste(split_val))
           })
@@ -2544,6 +2610,10 @@ server <- function(input, output, session) {
     )
   })
   
+  
+  
+  
+  
   # Apply final cell type labels
   observeEvent(input$applyLabels_final, {
     req(current_subset(), input$subsetSelector)
@@ -2573,7 +2643,6 @@ server <- function(input, output, session) {
       showNotification(paste("Final cell type labels applied to", input$subsetSelector), type = "message")
     })
   })
-  
   
   # Integration Results Logic
   observeEvent(input$integrateResults, {
@@ -2662,9 +2731,9 @@ server <- function(input, output, session) {
     DimPlot(values$seurat, 
             reduction = "umap", 
             group.by = "cell_type_final", 
-            pt.size = 0.3,
+            pt.size = 0.4,
             label = TRUE,
-            label.size = 3,
+            label.size = 6,
             repel = TRUE) +
       theme(
         legend.position = "right",
@@ -2672,98 +2741,560 @@ server <- function(input, output, session) {
         plot.title = element_text(size = 14, hjust = 0.5)
       ) +
       ggtitle("Final Integrated Cell Type Annotations")
-  }, height = 600, width = 800)
+  }, height = 400, width = 600)
   
-
-  # Enhanced download handler for comprehensive export
-  output$downloadFinalResults <- downloadHandler(
-    filename = function() {
-      paste("integrated_results_", Sys.Date(), ".zip", sep = "")
-    },
-    content = function(file) {
-      temp_dir <- tempdir()
+  
+  # Download Logic
+  observeEvent(input$downloadIntegratedData, {
+    # Check if output folder is set
+    if(!exists("output_folder") || is.null(output_folder) || output_folder == "") {
+      showNotification("Please set an output directory in the Setup tab first", type = "error")
+      return()
+    }
+    
+    # Check if output folder exists
+    if(!dir.exists(output_folder)) {
+      showNotification("Output directory does not exist. Please select a valid directory in the Setup tab", type = "error")
+      return()
+    }
+    
+    # Check if any items are selected
+    if(is.null(input$finalExportItems) || length(input$finalExportItems) == 0) {
+      showNotification("Please select at least one item to export", type = "warning")
+      return()
+    }
+    
+    withProgress(message = 'Saving files to output directory...', value = 0, {
       
-      # Save the integrated Seurat object
-      if(!is.null(values$seurat) && "cell_type_final" %in% colnames(values$seurat@meta.data)) {
-        saveRDS(values$seurat, file.path(temp_dir, "integrated_seurat_object.rds"))
+      # Create a timestamped subfolder for this export
+      timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+      export_folder <- file.path(output_folder, paste0("GUIdedRNA_Results_", timestamp))
+      
+      # Create the export directory
+      dir.create(export_folder, recursive = TRUE, showWarnings = FALSE)
+      
+      total_items <- length(input$finalExportItems)
+      progress_increment <- 1 / total_items
+      
+      files_saved <- c()
+      
+      if("final_rds" %in% input$finalExportItems && !is.null(values$seurat)) {
+        incProgress(progress_increment, detail = "Saving Seurat object...")
+        rds_file <- file.path(export_folder, "processed_annotated_integrated_seurat.rds")
+        saveRDS(values$seurat, rds_file)
+        files_saved <- c(files_saved, "Seurat Object (RDS)")
       }
       
-      # Save integration summary
-      if(!is.null(values$integration_summary)) {
-        capture.output(
-          {
-            cat("Final Cell Type Integration Summary\n")
-            cat("==================================\n\n")
-            cat(paste("Total cells in dataset:", values$integration_summary$total_cells, "\n"))
-            cat(paste("Cells with final annotations:", values$integration_summary$assigned_cells, "\n"))
-            cat(paste("Unassigned cells:", values$integration_summary$unassigned_cells, "\n"))
-            cat(paste("Assignment percentage:", values$integration_summary$assigned_percentage, "%\n\n"))
-            cat("Final cell type distribution:\n")
-            print(values$integration_summary$final_cell_types)
-          },
-          file = file.path(temp_dir, "integration_summary.txt")
+      if("count_matrix" %in% input$finalExportItems && !is.null(values$seurat)) {
+        incProgress(progress_increment, detail = "Saving count matrix...")
+        matrix_file <- file.path(export_folder, "processed_count_matrix.mtx")
+        Matrix::writeMM(GetAssayData(values$seurat, layer = "counts"), matrix_file)
+        files_saved <- c(files_saved, "Count Matrix (MTX)")
+      }
+      
+      if("final_meta" %in% input$finalExportItems && !is.null(values$seurat)) {
+        incProgress(progress_increment, detail = "Saving metadata...")
+        meta_file <- file.path(export_folder, "cell_type_metadata.csv")
+        write.csv(values$seurat@meta.data, meta_file, row.names = TRUE)
+        files_saved <- c(files_saved, "Cell Type Metadata (CSV)")
+      }
+      
+      if("subset_markers" %in% input$finalExportItems && !is.null(values$subset_markers)) {
+        incProgress(progress_increment, detail = "Saving marker genes...")
+        marker_count <- 0
+        for(subset_name in names(values$subset_markers)) {
+          # Clean subset name for filename (remove special characters)
+          clean_name <- gsub("[^A-Za-z0-9_-]", "_", subset_name)
+          marker_file <- file.path(export_folder, paste0("markers_", clean_name, ".csv"))
+          write.csv(values$subset_markers[[subset_name]], marker_file, row.names = FALSE)
+          marker_count <- marker_count + 1
+        }
+        files_saved <- c(files_saved, paste0("Subset Marker Genes (", marker_count, " files)"))
+      }
+      
+      if("dimred_coords" %in% input$finalExportItems && !is.null(values$seurat) && "umap" %in% names(values$seurat@reductions)) {
+        incProgress(progress_increment, detail = "Saving UMAP coordinates...")
+        coords <- as.data.frame(values$seurat@reductions$umap@cell.embeddings)
+        coords_file <- file.path(export_folder, "dimensionality_reduction_coordinates.csv")
+        write.csv(coords, coords_file, row.names = TRUE)
+        files_saved <- c(files_saved, "UMAP Coordinates (CSV)")
+      }
+      
+      if("integration_report" %in% input$finalExportItems && !is.null(values$integration_summary)) {
+        incProgress(progress_increment, detail = "Saving integration report...")
+        report_file <- file.path(export_folder, "integration_summary_report.txt")
+        
+        # Create the report content
+        report_content <- paste(
+          "GUIdedRNA Analysis Results",
+          "==========================",
+          "",
+          paste("Analysis completed:", Sys.time()),
+          paste("Export directory:", export_folder),
+          "",
+          "Final Cell Type Integration Summary",
+          "==================================",
+          "",
+          paste("Total cells in dataset:", values$integration_summary$total_cells),
+          paste("Cells with final annotations:", values$integration_summary$assigned_cells),
+          paste("Unassigned cells:", values$integration_summary$unassigned_cells),
+          paste("Assignment percentage:", values$integration_summary$assigned_percentage, "%"),
+          "",
+          "Final cell type distribution:",
+          paste(capture.output(print(values$integration_summary$final_cell_types)), collapse = "\n"),
+          "",
+          "Files exported:",
+          paste("-", files_saved, collapse = "\n"),
+          sep = "\n"
+        )
+        
+        writeLines(report_content, report_file)
+        files_saved <- c(files_saved, "Integration Report (TXT)")
+      }
+      
+      # Create a summary file with export information
+      summary_file <- file.path(export_folder, "export_summary.txt")
+      summary_content <- paste(
+        "GUIdedRNA Export Summary",
+        "========================",
+        "",
+        paste("Export timestamp:", timestamp),
+        paste("Export directory:", export_folder),
+        paste("Total files exported:", length(files_saved)),
+        "",
+        "Exported files:",
+        paste("-", files_saved, collapse = "\n"),
+        "",
+        "File descriptions:",
+        "- processed_annotated_integrated_seurat.rds: Complete Seurat object with all analyses",
+        "- processed_count_matrix.mtx: Raw count matrix in Matrix Market format",
+        "- cell_type_metadata.csv: Cell metadata including final annotations",
+        "- markers_[celltype].csv: Differentially expressed genes for each cell type subset",
+        "- dimensionality_reduction_coordinates.csv: UMAP coordinates for visualization",
+        "- integration_summary_report.txt: Detailed analysis summary and statistics",
+        sep = "\n"
+      )
+      
+      writeLines(summary_content, summary_file)
+    })
+    
+    # Show success notification with file count and location
+    showNotification(
+      HTML(paste0(
+        "<strong>Export completed successfully!</strong><br>",
+        "Files saved to: ", export_folder, "<br>",
+        "Total files: ", length(files_saved) + 1  # +1 for the summary file
+      )),
+      type = "message",
+      duration = 10  # Show for 10 seconds
+    )
+  })
+
+# Download UMAP for Final Clustering
+observeEvent(input$downloadUMAP_final, {
+  # Check if output folder is set
+  if(!exists("output_folder") || is.null(output_folder) || output_folder == "") {
+    showNotification("Please set an output directory in the Setup tab first", type = "error")
+    return()
+  }
+  
+  # Check if output folder exists
+  if(!dir.exists(output_folder)) {
+    showNotification("Output directory does not exist. Please select a valid directory in the Setup tab", type = "error")
+    return()
+  }
+  
+  # Check if current subset and UMAP exist
+  if(is.null(current_subset()) || !"umap" %in% names(current_subset()@reductions)) {
+    showNotification("No UMAP available to download. Please run LSI Round 2 first.", type = "error")
+    return()
+  }
+  
+  withProgress(message = 'Saving UMAP figure...', {
+    # Create timestamped filename
+    timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+    subset_name_clean <- gsub("[^A-Za-z0-9_-]", "_", input$subsetSelector)
+    
+    # Create descriptive filename based on current settings
+    if(input$umapDisplayType_final == "clusters") {
+      if(is.null(input$umapSplitBy_final) || input$umapSplitBy_final == "none") {
+        filename <- paste0("Final_Clustering_", subset_name_clean, "_UMAP_", input$umapGroupBy_final, "_", timestamp, ".png")
+      } else {
+        filename <- paste0("Final_Clustering_", subset_name_clean, "_UMAP_", input$umapGroupBy_final, "_split_by_", input$umapSplitBy_final, "_", timestamp, ".png")
+      }
+    } else {
+      feature_name <- gsub("[^A-Za-z0-9_-]", "_", input$featureSelect_final)
+      if(is.null(input$umapSplitBy_final) || input$umapSplitBy_final == "none") {
+        filename <- paste0("Final_Clustering_", subset_name_clean, "_Expression_", feature_name, "_", timestamp, ".png")
+      } else {
+        filename <- paste0("Final_Clustering_", subset_name_clean, "_Expression_", feature_name, "_split_by_", input$umapSplitBy_final, "_", timestamp, ".png")
+      }
+    }
+    
+    # Full file path
+    file_path <- file.path(output_folder, filename)
+    
+    # Recreate the current plot
+    common_theme <- theme(
+      legend.position = "right",
+      aspect.ratio = 1,
+      plot.margin = margin(10, 10, 10, 10),
+      axis.text = element_text(size = 10),
+      axis.title = element_text(size = 12),
+      legend.text = element_text(size = 10),
+      plot.title = element_text(size = 14, hjust = 0.5)
+    )
+    
+    if(input$umapDisplayType_final == "clusters") {
+      if(is.null(input$umapSplitBy_final) || input$umapSplitBy_final == "none") {
+        p <- DimPlot(current_subset(), 
+                     reduction = "umap", 
+                     group.by = input$umapGroupBy_final, 
+                     pt.size = 0.8,
+                     label = TRUE,
+                     label.size = 5) +
+          common_theme +
+          ggtitle(paste(input$subsetSelector, "- Colored by:", input$umapGroupBy_final))
+      } else {
+        p <- DimPlot(current_subset(), 
+                     reduction = "umap", 
+                     group.by = input$umapGroupBy_final, 
+                     split.by = input$umapSplitBy_final,
+                     pt.size = 0.8,
+                     label = TRUE,
+                     label.size = 5) +
+          common_theme +
+          ggtitle(paste(input$subsetSelector, "- Colored by:", input$umapGroupBy_final, "| Split by:", input$umapSplitBy_final))
+      }
+    } else {
+      req(input$featureSelect_final)
+      if(is.null(input$umapSplitBy_final) || input$umapSplitBy_final == "none") {
+        p <- FeaturePlot(current_subset(), 
+                         features = input$featureSelect_final, 
+                         min.cutoff = "q10", 
+                         max.cutoff = "q90",
+                         pt.size = 0.8) +
+          scale_color_gradient(low = "#00bfc4", high = "#f8766d", na.value = "grey50",
+                               name = "Expression") +
+          common_theme +
+          ggtitle(paste(input$subsetSelector, "- Expression:", input$featureSelect_final))
+      } else {
+        split_factor <- current_subset()@meta.data[[input$umapSplitBy_final]]
+        unique_splits <- unique(split_factor)
+        
+        plot_list <- lapply(unique_splits, function(split_val) {
+          cells_subset <- colnames(current_subset())[split_factor == split_val]
+          
+          FeaturePlot(current_subset(), 
+                      features = input$featureSelect_final,
+                      cells = cells_subset,
+                      min.cutoff = "q10", 
+                      max.cutoff = "q90",
+                      pt.size = 0.8) +
+            scale_color_gradient(low = "#00bfc4", high = "#f8766d", na.value = "grey50",
+                                 name = "Expression") +
+            common_theme +
+            ggtitle(paste(split_val))
+        })
+        
+        p <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
+        p <- cowplot::plot_grid(
+          cowplot::ggdraw() + 
+            cowplot::draw_label(paste(input$subsetSelector, "- Expression:", input$featureSelect_final, "| Split by:", input$umapSplitBy_final), 
+                                fontface = 'bold', size = 14),
+          p,
+          ncol = 1,
+          rel_heights = c(0.1, 1)
         )
       }
-      
-      # Save final metadata
-      if(!is.null(values$seurat)) {
-        write.csv(values$seurat@meta.data, file.path(temp_dir, "final_metadata.csv"))
-      }
-      
-      # Zip all files
-      files_to_zip <- list.files(temp_dir, pattern = "\\.rds$|\\.csv$|\\.txt$", full.names = TRUE)
-      zip(file, files_to_zip)
     }
-  )
+    
+    # Save the plot
+    ggsave(file_path, plot = p, width = 12, height = 8, dpi = 300, bg = "white")
+  })
   
-  # Download results logic
-  output$downloadData <- downloadHandler(
-    filename = function() {
-      paste("scRNA_results_", Sys.Date(), ".zip", sep = "")
-    },
-    content = function(file) {
-      # Create temporary directory
-      temp_dir <- tempdir()
-      
-      # Prepare files based on user selection
-      if("rds" %in% input$downloadItems) {
-        saveRDS(values$seurat, file.path(temp_dir, "seurat_object.rds"))
-      }
-      
-      if("meta" %in% input$downloadItems) {
-        write.csv(values$seurat@meta.data, file.path(temp_dir, "cell_metadata.csv"))
-      }
-      
-      if("markers" %in% input$downloadItems && !is.null(values$markers)) {
-        write.csv(values$markers, file.path(temp_dir, "marker_genes.csv"))
-      }
-      
-      if("dimred" %in% input$downloadItems && !is.null(values$reduction_done)) {
-        # Get the last used reduction
-        red_type <- tolower(input$reduction)
-        if(red_type %in% names(values$seurat@reductions)) {
-          coords <- as.data.frame(values$seurat@reductions[[red_type]]@cell.embeddings)
-          write.csv(coords, file.path(temp_dir, paste0(red_type, "_coordinates.csv")))
-        }
-      }
-      
-      if("report" %in% input$downloadItems) {
-        # Generate report (would need additional code for comprehensive report)
-        # Simple placeholder
-        cat("# scRNA-seq Analysis Report\n\nDate: ", Sys.Date(), 
-            "\n\n## Summary\n\n", file = file.path(temp_dir, "report.md"))
-      }
-      
-      # Zip all files
-      files_to_zip <- list.files(temp_dir, pattern = "\\.csv$|\\.rds$|\\.md$", full.names = TRUE)
-      zip(file, files_to_zip)
-    }
+  showNotification(
+    HTML(paste0(
+      "<strong>Figure saved successfully!</strong><br>",
+      "File: ", basename(file_path), "<br>",
+      "Location: ", output_folder
+    )),
+    type = "message",
+    duration = 5
   )
-  
-}  
+})
 
+
+# Download UMAP for Initial Clustering
+observeEvent(input$downloadUMAP_initial, {
+  # Check if output folder is set
+  if(!exists("output_folder") || is.null(output_folder) || output_folder == "") {
+    showNotification("Please set an output directory in the Setup tab first", type = "error")
+    return()
+  }
   
+  # Check if output folder exists
+  if(!dir.exists(output_folder)) {
+    showNotification("Output directory does not exist. Please select a valid directory in the Setup tab", type = "error")
+    return()
+  }
   
+  # Check if seurat object and UMAP exist
+  if(is.null(values$seurat) || !"umap" %in% names(values$seurat@reductions)) {
+    showNotification("No UMAP available to download. Please run LSI first.", type = "error")
+    return()
+  }
+  
+  withProgress(message = 'Saving UMAP figure...', {
+    # Create timestamped filename
+    timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+    
+    # Create descriptive filename based on current settings
+    if(input$umapDisplayType == "clusters") {
+      if(is.null(input$umapSplitBy) || input$umapSplitBy == "none") {
+        filename <- paste0("Initial_Clustering_UMAP_", input$umapGroupBy, "_", timestamp, ".png")
+      } else {
+        filename <- paste0("Initial_Clustering_UMAP_", input$umapGroupBy, "_split_by_", input$umapSplitBy, "_", timestamp, ".png")
+      }
+    } else {
+      feature_name <- gsub("[^A-Za-z0-9_-]", "_", input$featureSelect)
+      if(is.null(input$umapSplitBy) || input$umapSplitBy == "none") {
+        filename <- paste0("Initial_Clustering_Expression_", feature_name, "_", timestamp, ".png")
+      } else {
+        filename <- paste0("Initial_Clustering_Expression_", feature_name, "_split_by_", input$umapSplitBy, "_", timestamp, ".png")
+      }
+    }
+    
+    # Full file path
+    file_path <- file.path(output_folder, filename)
+    
+    # Recreate the current plot
+    common_theme <- theme(
+      legend.position = "right",
+      aspect.ratio = 1,
+      plot.margin = margin(10, 10, 10, 10),
+      axis.text = element_text(size = 10),
+      axis.title = element_text(size = 12),
+      legend.text = element_text(size = 10),
+      plot.title = element_text(size = 14, hjust = 0.5)
+    )
+    
+    if(input$umapDisplayType == "clusters") {
+      if(is.null(input$umapSplitBy) || input$umapSplitBy == "none") {
+        p <- DimPlot(values$seurat, 
+                     reduction = "umap", 
+                     group.by = input$umapGroupBy, 
+                     pt.size = 0.8,
+                     label = TRUE,
+                     label.size = 5) +
+          common_theme +
+          ggtitle(paste("Colored by:", input$umapGroupBy))
+      } else {
+        p <- DimPlot(values$seurat, 
+                     reduction = "umap", 
+                     group.by = input$umapGroupBy, 
+                     split.by = input$umapSplitBy,
+                     pt.size = 0.8,
+                     label = TRUE,
+                     label.size = 5) +
+          common_theme +
+          ggtitle(paste("Colored by:", input$umapGroupBy, "| Split by:", input$umapSplitBy))
+      }
+    } else {
+      req(input$featureSelect)
+      if(is.null(input$umapSplitBy) || input$umapSplitBy == "none") {
+        p <- FeaturePlot(values$seurat, 
+                         features = input$featureSelect, 
+                         min.cutoff = "q10", 
+                         max.cutoff = "q90",
+                         pt.size = 0.8) +
+          scale_color_gradient(low = "#00bfc4", high = "#f8766d", na.value = "grey50",
+                               name = "Expression") +
+          common_theme +
+          ggtitle(paste("Expression:", input$featureSelect))
+      } else {
+        split_factor <- values$seurat@meta.data[[input$umapSplitBy]]
+        unique_splits <- unique(split_factor)
+        
+        plot_list <- lapply(unique_splits, function(split_val) {
+          cells_subset <- colnames(values$seurat)[split_factor == split_val]
+          
+          FeaturePlot(values$seurat, 
+                      features = input$featureSelect,
+                      cells = cells_subset,
+                      min.cutoff = "q10", 
+                      max.cutoff = "q90",
+                      pt.size = 0.8) +
+            scale_color_gradient(low = "#00bfc4", high = "#f8766d", na.value = "grey50",
+                                 name = "Expression") +
+            common_theme +
+            ggtitle(paste(split_val))
+        })
+        
+        p <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
+        p <- cowplot::plot_grid(
+          cowplot::ggdraw() + 
+            cowplot::draw_label(paste("Expression:", input$featureSelect, "| Split by:", input$umapSplitBy), 
+                                fontface = 'bold', size = 14),
+          p,
+          ncol = 1,
+          rel_heights = c(0.1, 1)
+        )
+      }
+    }
+    
+    # Save the plot
+    ggsave(file_path, plot = p, width = 12, height = 8, dpi = 300, bg = "white")
+  })
+  
+  showNotification(
+    HTML(paste0(
+      "<strong>Figure saved successfully!</strong><br>",
+      "File: ", basename(file_path), "<br>",
+      "Location: ", output_folder
+    )),
+    type = "message",
+    duration = 5
+  )
+})
+
+# Download UMAP for Final Clustering
+observeEvent(input$downloadUMAP_final, {
+  # Check if output folder is set
+  if(!exists("output_folder") || is.null(output_folder) || output_folder == "") {
+    showNotification("Please set an output directory in the Setup tab first", type = "error")
+    return()
+  }
+  
+  # Check if output folder exists
+  if(!dir.exists(output_folder)) {
+    showNotification("Output directory does not exist. Please select a valid directory in the Setup tab", type = "error")
+    return()
+  }
+  
+  # Check if current subset and UMAP exist
+  if(is.null(current_subset()) || !"umap" %in% names(current_subset()@reductions)) {
+    showNotification("No UMAP available to download. Please run LSI Round 2 first.", type = "error")
+    return()
+  }
+  
+  withProgress(message = 'Saving UMAP figure...', {
+    # Create timestamped filename
+    timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+    subset_name_clean <- gsub("[^A-Za-z0-9_-]", "_", input$subsetSelector)
+    
+    # Create descriptive filename based on current settings
+    if(input$umapDisplayType_final == "clusters") {
+      if(is.null(input$umapSplitBy_final) || input$umapSplitBy_final == "none") {
+        filename <- paste0("Final_Clustering_", subset_name_clean, "_UMAP_", input$umapGroupBy_final, "_", timestamp, ".png")
+      } else {
+        filename <- paste0("Final_Clustering_", subset_name_clean, "_UMAP_", input$umapGroupBy_final, "_split_by_", input$umapSplitBy_final, "_", timestamp, ".png")
+      }
+    } else {
+      feature_name <- gsub("[^A-Za-z0-9_-]", "_", input$featureSelect_final)
+      if(is.null(input$umapSplitBy_final) || input$umapSplitBy_final == "none") {
+        filename <- paste0("Final_Clustering_", subset_name_clean, "_Expression_", feature_name, "_", timestamp, ".png")
+      } else {
+        filename <- paste0("Final_Clustering_", subset_name_clean, "_Expression_", feature_name, "_split_by_", input$umapSplitBy_final, "_", timestamp, ".png")
+      }
+    }
+    
+    # Full file path
+    file_path <- file.path(output_folder, filename)
+    
+    # Recreate the current plot
+    common_theme <- theme(
+      legend.position = "right",
+      aspect.ratio = 1,
+      plot.margin = margin(10, 10, 10, 10),
+      axis.text = element_text(size = 10),
+      axis.title = element_text(size = 12),
+      legend.text = element_text(size = 10),
+      plot.title = element_text(size = 14, hjust = 0.5)
+    )
+    
+    if(input$umapDisplayType_final == "clusters") {
+      if(is.null(input$umapSplitBy_final) || input$umapSplitBy_final == "none") {
+        p <- DimPlot(current_subset(), 
+                     reduction = "umap", 
+                     group.by = input$umapGroupBy_final, 
+                     pt.size = 0.8,
+                     label = TRUE,
+                     label.size = 5) +
+          common_theme +
+          ggtitle(paste(input$subsetSelector, "- Colored by:", input$umapGroupBy_final))
+      } else {
+        p <- DimPlot(current_subset(), 
+                     reduction = "umap", 
+                     group.by = input$umapGroupBy_final, 
+                     split.by = input$umapSplitBy_final,
+                     pt.size = 0.8,
+                     label = TRUE,
+                     label.size = 5) +
+          common_theme +
+          ggtitle(paste(input$subsetSelector, "- Colored by:", input$umapGroupBy_final, "| Split by:", input$umapSplitBy_final))
+      }
+    } else {
+      req(input$featureSelect_final)
+      if(is.null(input$umapSplitBy_final) || input$umapSplitBy_final == "none") {
+        p <- FeaturePlot(current_subset(), 
+                         features = input$featureSelect_final, 
+                         min.cutoff = "q10", 
+                         max.cutoff = "q90",
+                         pt.size = 0.8) +
+          scale_color_gradient(low = "#00bfc4", high = "#f8766d", na.value = "grey50",
+                               name = "Expression") +
+          common_theme +
+          ggtitle(paste(input$subsetSelector, "- Expression:", input$featureSelect_final))
+      } else {
+        split_factor <- current_subset()@meta.data[[input$umapSplitBy_final]]
+        unique_splits <- unique(split_factor)
+        
+        plot_list <- lapply(unique_splits, function(split_val) {
+          cells_subset <- colnames(current_subset())[split_factor == split_val]
+          
+          FeaturePlot(current_subset(), 
+                      features = input$featureSelect_final,
+                      cells = cells_subset,
+                      min.cutoff = "q10", 
+                      max.cutoff = "q90",
+                      pt.size = 0.8) +
+            scale_color_gradient(low = "#00bfc4", high = "#f8766d", na.value = "grey50",
+                                 name = "Expression") +
+            common_theme +
+            ggtitle(paste(split_val))
+        })
+        
+        p <- cowplot::plot_grid(plotlist = plot_list, ncol = 2)
+        p <- cowplot::plot_grid(
+          cowplot::ggdraw() + 
+            cowplot::draw_label(paste(input$subsetSelector, "- Expression:", input$featureSelect_final, "| Split by:", input$umapSplitBy_final), 
+                                fontface = 'bold', size = 14),
+          p,
+          ncol = 1,
+          rel_heights = c(0.1, 1)
+        )
+      }
+    }
+    
+    # Save the plot
+    ggsave(file_path, plot = p, width = 12, height = 8, dpi = 300, bg = "white")
+  })
+  
+  showNotification(
+    HTML(paste0(
+      "<strong>Figure saved successfully!</strong><br>",
+      "File: ", basename(file_path), "<br>",
+      "Location: ", output_folder
+    )),
+    type = "message",
+    duration = 5
+  )
+})
+ 
+
+}
+ 
 # Run the application
 shinyApp(ui = ui, server = server, options = list(
   width = 1200,
