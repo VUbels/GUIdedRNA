@@ -13,6 +13,9 @@ run_SparseLogX(spmat, logtype = "log2", scale = FALSE, scaleFactor = 10^4)
 
 \item{scaleFactor}{scaling factor, standardized to 10^4.}
 }
+\value{
+Logarithmic sparse matrix
+}
 \description{
 Work around for staying with sparse matrix format in Seurat object to reduce object size.
 }

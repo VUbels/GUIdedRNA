@@ -1,10 +1,12 @@
 #' Variable gene function selection enabling.
 #'
-#' Work around for staying with sparse matrix format in seurat object to reduce object size.
-#' 
+#' @description Work around for staying with sparse matrix format in seurat object to reduce object size.
+#' @returns Variable list of genes
 #' @param mat raw count matrix from Seurat object.
 #' @param nvar number of variable genes to be found.
 #' @param blacklist list of genes to exclude from variable gene analysis.
+#' @export
+#' 
 
 generate_VariableGenes <- function(mat, nvar = 2000, blacklist = NULL){
   # Get the top nvar variable genes present in mat (a gene x sample/cell matrix)
@@ -24,11 +26,12 @@ generate_VariableGenes <- function(mat, nvar = 2000, blacklist = NULL){
 
 #' Sparse Log of X function. Log normalization on sparse matrix, returns sparse matrix.
 #'
-#' Work around for staying with sparse matrix format in Seurat object to reduce object size.
-#' 
+#' @description Work around for staying with sparse matrix format in Seurat object to reduce object size.
+#' @returns Logarithmic sparse matrix
 #' @param spmat raw count matrix from Seurat object in sparse format.
 #' @param logtype c("log", "log2", "log10"), standardized to log2.
 #' @param scaleFactor scaling factor, standardized to 10^4.
+#' @export
 
 run_SparseLogX <- function(spmat, logtype="log2", scale=FALSE, scaleFactor=10^4){
   stopifnot(any(logtype == c("log", "log2", "log10")))
@@ -101,6 +104,7 @@ run_SparseLogX <- function(spmat, logtype="log2", scale=FALSE, scaleFactor=10^4)
 #' @param selected_blacklist vector of selected blacklist options from UI.
 #' @param send_message function to send messages to the UI (optional).
 #' @return vector of gene names to blacklist.
+#' @export
 #' 
 generate_GeneBlacklist <- function(count_matrix, selected_blacklist, send_message = NULL) {
   # Initialize empty blacklist
@@ -161,6 +165,7 @@ generate_GeneBlacklist <- function(count_matrix, selected_blacklist, send_messag
 #' @param groups which groups to summarize.
 #' @param na.rm whether to remove any NA from matrix.
 #' @param sparse whether to use sparse matrix conversion.
+#' @export
 
 generate_GroupSums <- function(mat, groups = NULL, na.rm = TRUE, sparse = FALSE){
   stopifnot(!is.null(groups))
@@ -193,6 +198,7 @@ generate_GroupSums <- function(mat, groups = NULL, na.rm = TRUE, sparse = FALSE)
 #' @param umapDistMetric distance metric for UMAP.
 #' @param send_message function to send messages to the UI.
 #' @return list containing updated Seurat object and LSI results.
+#' @export
 #'
 process_LSI <- function(seurat_obj, 
                         rawCounts = NULL,
@@ -339,6 +345,7 @@ process_LSI <- function(seurat_obj,
 #' @param nComponents number of right singular vectors to estimate.
 #' @param binarize whether to binarize dgCMatrix class.
 #' @return list containing LSI results.
+#' @export
 
 
 LSI_function <- function(mat, nComponents, binarize = FALSE){

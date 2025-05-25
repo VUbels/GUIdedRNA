@@ -1,2 +1,9 @@
-^GUIdedRNA\.Rproj$
+^.*\.Rproj$
 ^\.Rproj\.user$
+^\.github$
+^docker*
+^\.dockerignore$
+^README\.Rmd$
+^deploy\.sh$
+^Dockerfile$
+^docker-compose\.yml$

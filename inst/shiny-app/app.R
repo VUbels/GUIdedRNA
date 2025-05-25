@@ -1,11 +1,11 @@
-# Load required libraries
-library(shiny)
-library(shinydashboard)
-library(shinyFiles)
-library(shinyjs)
-library(shinycssloaders)
+message("Starting GUIdedRNA app...")
 
-message("Starting app.R...")
+# Check if running in package context
+if (!requireNamespace("GUIdedRNA", quietly = TRUE)) {
+  stop("GUIdedRNA package not found. Please install the package first.")
+}
+
+# Source global.R which is in the same directory
 if (file.exists("global.R")) {
   message("Found global.R, loading it...")
   source("global.R")
@@ -13,7 +13,6 @@ if (file.exists("global.R")) {
   message("global.R not found in working directory:", getwd())
 }
 
-#library(GUIdedRNA)
 
 # Global message queue 
 message_queue <- character(0)

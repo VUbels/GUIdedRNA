@@ -3,14 +3,47 @@ Title: scRNA analysis in a simple interface
 Version: 0.0.0.9000
 Authors@R: 
     person("Victor", "Ubels", email = "U.Victor@hotmail.nl", role = c("aut", "cre"))
-Description: A complete isolated GUI for easy scRNA latent semantic indexing based clustering, annotation and subsequent commonly used analyses.
-URL: 
-License: use_mit_license()
+Description: A comprehensive Shiny application for guided RNA-seq analysis 
+    including quality control, preprocessing, dimensionality reduction, 
+    clustering, and cell type annotation.
+License: MIT + file LICENSE
 Encoding: UTF-8
-Roxygen: list(markdown = TRUE)
+LazyData: true
 RoxygenNote: 7.3.2
+Depends: 
+    R (>= 4.0.0)
 Imports:
-    Seurat (>= 5.3.0),
-    shiny (>= 1.10.0),
-    presto,
-    fields
+    shiny (>= 1.7.0),
+    shinydashboard,
+    shinyFiles,
+    shinyjs,
+    shinycssloaders,
+    DT,
+    ggplot2,
+    Matrix,
+    dplyr,
+    irlba,
+    edgeR,
+    DoubletFinder,
+    celda,
+    Seurat (>= 5.0.0),
+    TxDb.Hsapiens.UCSC.hg38.knownGene,
+    org.Hs.eg.db,
+    cowplot,
+    plyr,
+    SeuratObject,
+    fs,
+    R6,
+    harmony,
+    GenomicFeatures,
+    GenomicRanges,
+    AnnotationDbi,
+    sparseMatrixStats,
+    matrixStats
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+URL: https://github.com/VUbels/GUIdedRNA
+BugReports: https://github.com/VUbels/GUIdedRNA/Issues

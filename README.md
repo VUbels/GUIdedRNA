@@ -1,71 +1,80 @@
-# scRNA-seq Shiny App
+# GUIdedRNA
 
-This repository contains a Docker-based Shiny application that can be used for single-cell RNA analysis. It's primarily designed to use adjusted Latent Semantic Indexing for clusterization, an alternative to K-means clustering, with the intent to provide a higher annotation accuracy specifically in higher cell count datasets.
+A comprehensive Shiny application for guided RNA-seq analysis including quality control, preprocessing, dimensionality reduction, clustering, and cell type annotation.
 
-## Quick Start
+## Features
 
-### Prerequisites
+- **Quality Control**: Interactive QC metrics visualization and filtering
+- **Preprocessing**: Doublet removal and ambient RNA correction
+- **LSI Analysis**: Two-round iterative Latent Semantic Indexing
+- **Cell Type Annotation**: Guided clustering and annotation workflow
+- **Integration**: Combine results from multiple analysis rounds
+- **Export**: Comprehensive results export in multiple formats
 
-- [Git](httpsgit-scm.comdownloads)
-- [Docker](httpswww.docker.comproductsdocker-desktop)
+## Installation
 
-### Running the App
+### From GitHub
+```r
+# Install devtools if you haven't already
+install.packages("devtools")
 
-On LinuxMac
+# Install GUIdedRNA
+devtools::install_github("VUbels/GUIdedRNA")
+```
 
+### Using Docker
 ```bash
-git clone https://github.com/VUbels/GUIdedRNA
+# Clone the repository
+git clone https://github.com/VUbels/GUIdedRNA.git
 cd GUIdedRNA
-chmod +x run.sh
-.run.sh
+
+# Quick deployment
+chmod +x deploy.sh
+./deploy.sh
 ```
 
-On Windows
+## Usage
 
-```cmd
-git clone https://github.com/VUbels/GUIdedRNA
-cd GUIdedRNA
-setup.bat
+### R Package
+```r
+library(GUIdedRNA)
+
+# Launch the application
+launch_GUIdedRNA()
+
+# Launch with custom settings
+launch_GUIdedRNA(port = 8080, host = "localhost")
 ```
 
-Once running, open your browser and go to httplocalhost3838
+### Docker
+```bash
+# Using docker-compose (recommended)
+docker-compose up
 
-## Future Extensions
-
-This demo provides a foundation currently including a full single-cell RNA analysis annotation pipeline that can be used for:
-
-- Data uploading
-- Quality control and filtering
-- Doublet Removal
-- Ambient RNA Removal
-- Normalization and scaling
-- Dimension reduction (PCA, t-SNE, UMAP)
-- Adjust Latent Semantic Indexing approach for cluster annotation
-- Clustering and marker gene identification
-- Interactive visualization of results
-
-## Repository Structure
-
-```
-GUIdedRNA
-├── README.md          # This file
-├── Dockerfile         # Docker configuration
-├── run.sh             # Script to build and run on LinuxMac
-├── app               # Shiny application files
-│   ├── app.R          # Main Shiny app code
-│   ├── data          # Example data files
-│   └── www           # Static assets (CSS, images)
-└── setup             # Setup scripts and utilities
-    ├── setup.sh       # LinuxMac setup
-    └── setup.bat      # Windows setup
+# Or manual Docker
+docker build -t guidedrna .
+docker run -p 3838:3838 -v ./data:/data -v ./output:/output guidedrna
 ```
 
-## System Requirements
+## Workflow
 
-The Docker container is configured to use the resources allocated to Docker on your system. For analyzing larger scRNA-seq datasets, you may need to increase the resources allocated to Docker in Docker Desktop settings.
+1. **Setup**: Upload 10X Genomics data or folder containing multiple datasets
+2. **Sample Information**: Add metadata and sample attributes
+3. **Quality Control**: Set filtering parameters and visualize QC metrics
+4. **Preprocessing**: Run doublet removal and ambient RNA correction
+5. **LSI Round 1**: Initial dimensionality reduction and broad clustering
+6. **Initial Clustering**: Assign broad cell types using marker genes
+7. **LSI Round 2**: Refined analysis on cell type subsets
+8. **Final Clustering**: Detailed cell type annotation
+9. **Integration**: Combine all results into final annotations
+10. **Download**: Export processed data and results
 
-## Troubleshooting
+## Requirements
 
-- Port conflicts If port 3838 is already in use, modify the port number in `run.sh` or `setup.bat`
-- Memory issues Increase memory allocation to Docker in Docker Desktop settings
-- Container not starting Check Docker logs for more detailed error messages
+- R >= 4.0.0
+- Seurat >= 5.0.0
+- Docker (for containerized deployment)
+
+## Support
+
+For issues and questions, please visit our [GitHub Issues](https://github.com/VUbels/GUIdedRNA/issues) page.

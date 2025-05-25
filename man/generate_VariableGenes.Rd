@@ -13,6 +13,9 @@ generate_VariableGenes(mat, nvar = 2000, blacklist = NULL)
 
 \item{blacklist}{list of genes to exclude from variable gene analysis.}
 }
+\value{
+Variable list of genes
+}
 \description{
 Work around for staying with sparse matrix format in seurat object to reduce object size.
 }
