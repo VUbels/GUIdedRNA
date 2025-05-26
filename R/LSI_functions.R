@@ -1,38 +1,100 @@
 #' Variable gene function selection enabling.
 #'
-#' @description Work around for staying with sparse matrix format in seurat object to reduce object size.
-#' @returns Variable list of genes
+#' Generates variable genes from matrix
+#'
+#' @return Variable list of genes
 #' @param mat raw count matrix from Seurat object.
 #' @param nvar number of variable genes to be found.
 #' @param blacklist list of genes to exclude from variable gene analysis.
 #' @export
 #' 
-
 generate_VariableGenes <- function(mat, nvar = 2000, blacklist = NULL){
+  # Safety checks
+  if (is.null(mat) || length(dim(mat)) != 2) {
+    stop("Input matrix must be a 2-dimensional matrix or sparse matrix")
+  }
+  
+  if (nrow(mat) == 0 || ncol(mat) == 0) {
+    warning("Input matrix is empty")
+    return(character(0))
+  }
+  
+  # Ensure rownames exist
+  if (is.null(rownames(mat))) {
+    rownames(mat) <- paste0("Gene_", 1:nrow(mat))
+    message("Matrix had no rownames. Generated generic names.")
+  }
+  
   # Get the top nvar variable genes present in mat (a gene x sample/cell matrix)
   # If blacklist is present, do not return any genes in the blacklist
-  if(!is.null(blacklist)){
+  if(!is.null(blacklist) && length(blacklist) > 0){
+    # Ensure blacklist is character vector
+    blacklist <- as.character(blacklist)
+    
     ncount <- nrow(mat)
-    mat <- mat[!rownames(mat) %in% blacklist,]
+    # Use proper logical indexing with %in%
+    genes_to_keep <- !(rownames(mat) %in% blacklist)
+    mat <- mat[genes_to_keep, , drop = FALSE]
+    
     message(sprintf("Removed %s genes overlapping blacklist prior to selecting variable genes...", ncount - nrow(mat)))
+    
+    # Check if we still have genes left
+    if (nrow(mat) == 0) {
+      warning("All genes were filtered out by blacklist")
+      return(character(0))
+    }
   }
-  if(is(mat, "sparseMatrix")){
-    varGenes <- rownames(mat)[head(order(sparseMatrixStats::rowVars(mat), decreasing = TRUE), nvar)]
-  }else{
-    varGenes <- rownames(mat)[head(order(matrixStats::rowVars(mat), decreasing = TRUE), nvar)]
-  }
-  return(varGenes)
+  
+  # Calculate variance based on matrix type
+  tryCatch({
+    if(is(mat, "sparseMatrix")){
+      if (!requireNamespace("sparseMatrixStats", quietly = TRUE)) {
+        message("sparseMatrixStats not available, converting to dense matrix")
+        gene_vars <- matrixStats::rowVars(as.matrix(mat))
+      } else {
+        gene_vars <- sparseMatrixStats::rowVars(mat)
+      }
+    } else {
+      if (!requireNamespace("matrixStats", quietly = TRUE)) {
+        gene_vars <- apply(mat, 1, var)
+      } else {
+        gene_vars <- matrixStats::rowVars(mat)
+      }
+    }
+    
+    # Handle potential NA values in variance calculation
+    gene_vars[is.na(gene_vars)] <- 0
+    
+    # Get top variable genes
+    n_genes_to_select <- min(nvar, length(gene_vars))
+    top_indices <- head(order(gene_vars, decreasing = TRUE), n_genes_to_select)
+    varGenes <- rownames(mat)[top_indices]
+    
+    message(sprintf("Selected %d variable genes out of %d total genes", 
+                    length(varGenes), nrow(mat)))
+    
+    return(varGenes)
+    
+  }, error = function(e) {
+    message(paste("Error in variance calculation:", e$message))
+    message("Returning first n genes as fallback")
+    
+    # Fallback: return first n genes
+    n_genes_to_select <- min(nvar, nrow(mat))
+    return(rownames(mat)[1:n_genes_to_select])
+  })
 }
 
 #' Sparse Log of X function. Log normalization on sparse matrix, returns sparse matrix.
 #'
-#' @description Work around for staying with sparse matrix format in Seurat object to reduce object size.
-#' @returns Logarithmic sparse matrix
+#' Work around for staying with sparse matrix format in Seurat object to reduce object size.
+#' 
+#' @return Logarithmic sparse matrix
 #' @param spmat raw count matrix from Seurat object in sparse format.
 #' @param logtype c("log", "log2", "log10"), standardized to log2.
 #' @param scaleFactor scaling factor, standardized to 10^4.
 #' @export
-
+#' 
 run_SparseLogX <- function(spmat, logtype="log2", scale=FALSE, scaleFactor=10^4){
   stopifnot(any(logtype == c("log", "log2", "log10")))
   
@@ -100,6 +162,8 @@ run_SparseLogX <- function(spmat, logtype="log2", scale=FALSE, scaleFactor=10^4)
 
 #' Function to generate a gene blacklist based on user selections.
 #'
+#' Generates blacklisted genes to pass through LSI clustering
+#'
 #' @param count_matrix raw count matrix from Seurat object.
 #' @param selected_blacklist vector of selected blacklist options from UI.
 #' @param send_message function to send messages to the UI (optional).
@@ -117,43 +181,115 @@ generate_GeneBlacklist <- function(count_matrix, selected_blacklist, send_messag
     }
   }
   
-  # If blacklist options are selected
-  if(length(selected_blacklist) > 0) {
-    # Add mitochondrial genes if selected
-    if("blacklist_mitogenes" %in% selected_blacklist) {
-      mt.genes <- grep(pattern = "^MT-", x = rownames(count_matrix), value = TRUE)
-      blacklist.genes <- c(blacklist.genes, mt.genes)
-      send_message("Added mitochondrial genes to blacklist.")
-    }
-    
-    # Add sex chromosome genes if selected
-    if("blacklist_sexgenes" %in% selected_blacklist) {
-      # Extract sex chromosome genes
-      txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
-      geneGR <- GenomicFeatures::genes(txdb)
-      sexGenesGR <- geneGR[seqnames(geneGR) %in% c("chrY", "chrX")]
-      matchedGeneSymbols <- select(org.Hs.eg.db,
-                                   keys = sexGenesGR$gene_id,
-                                   columns = c("ENTREZID", "SYMBOL"),
-                                   keytype = "ENTREZID")
-      sexChr.genes <- matchedGeneSymbols$SYMBOL
-      blacklist.genes <- c(blacklist.genes, sexChr.genes)
-      send_message("Added X/Y chromosomal genes to blacklist.")
-    }
-    
-    # Add ribosomal genes if selected
-    if("blacklist_rbgenes" %in% selected_blacklist) {
-      RPS.genes <- grep(pattern = "^RPS", x = rownames(count_matrix), value = TRUE)
-      RPL.genes <- grep(pattern = "^RPL", x = rownames(count_matrix), value = TRUE)
-      blacklist.genes <- c(blacklist.genes, RPS.genes, RPL.genes)
-      send_message("Added ribosomal genes to blacklist.")
-    }
-    
-    # Remove duplicates
-    blacklist.genes <- unique(blacklist.genes)
-    send_message(sprintf("Final blacklist contains %d genes.", length(blacklist.genes)))
-  } else {
+  # Safety check: ensure count_matrix has rownames
+  if (is.null(rownames(count_matrix))) {
+    send_message("Warning: Count matrix has no rownames. Cannot generate gene blacklist.")
+    return(character(0))
+  }
+  
+  # Convert rownames to character vector to ensure proper matching
+  gene_names <- as.character(rownames(count_matrix))
+  
+  # Ensure selected_blacklist is properly formatted
+  if (is.null(selected_blacklist) || length(selected_blacklist) == 0) {
     send_message("No genes selected for blacklisting.")
+    return(character(0))
+  }
+  
+  # Convert to character vector if not already
+  selected_blacklist <- as.character(selected_blacklist)
+  
+  send_message(paste("Processing blacklist options:", paste(selected_blacklist, collapse = ", ")))
+  
+  # Add mitochondrial genes if selected
+  if("blacklist_mitogenes" %in% selected_blacklist) {
+    tryCatch({
+      mt.genes <- grep(pattern = "^MT-", x = gene_names, value = TRUE)
+      if (length(mt.genes) > 0) {
+        blacklist.genes <- c(blacklist.genes, mt.genes)
+        send_message(sprintf("Added %d mitochondrial genes to blacklist.", length(mt.genes)))
+      } else {
+        send_message("No mitochondrial genes found with pattern ^MT-")
+      }
+    }, error = function(e) {
+      send_message(paste("Error finding mitochondrial genes:", e$message))
+    })
+  }
+  
+  # Add sex chromosome genes if selected
+  if("blacklist_sexgenes" %in% selected_blacklist) {
+    tryCatch({
+      # Check if required packages are available
+      if (!requireNamespace("TxDb.Hsapiens.UCSC.hg38.knownGene", quietly = TRUE) ||
+          !requireNamespace("GenomicFeatures", quietly = TRUE) ||
+          !requireNamespace("org.Hs.eg.db", quietly = TRUE)) {
+        send_message("Required packages for sex chromosome genes not available. Skipping.")
+      } else {
+        # Extract sex chromosome genes
+        txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene::TxDb.Hsapiens.UCSC.hg38.knownGene
+        geneGR <- GenomicFeatures::genes(txdb)
+        sexGenesGR <- geneGR[GenomicRanges::seqnames(geneGR) %in% c("chrY", "chrX")]
+        
+        if (length(sexGenesGR) > 0) {
+          matchedGeneSymbols <- AnnotationDbi::select(org.Hs.eg.db::org.Hs.eg.db,
+                                                      keys = sexGenesGR$gene_id,
+                                                      columns = c("ENTREZID", "SYMBOL"),
+                                                      keytype = "ENTREZID")
+          
+          # Filter out NA symbols and ensure character vector
+          sexChr.genes <- as.character(matchedGeneSymbols$SYMBOL)
+          sexChr.genes <- sexChr.genes[!is.na(sexChr.genes)]
+          
+          if (length(sexChr.genes) > 0) {
+            blacklist.genes <- c(blacklist.genes, sexChr.genes)
+            send_message(sprintf("Added %d X/Y chromosomal genes to blacklist.", length(sexChr.genes)))
+          } else {
+            send_message("No valid sex chromosome gene symbols found.")
+          }
+        } else {
+          send_message("No sex chromosome genes found in annotation.")
+        }
+      }
+    }, error = function(e) {
+      send_message(paste("Error finding sex chromosome genes:", e$message))
+    })
+  }
+  
+  # Add ribosomal genes if selected
+  if("blacklist_rbgenes" %in% selected_blacklist) {
+    tryCatch({
+      RPS.genes <- grep(pattern = "^RPS", x = gene_names, value = TRUE)
+      RPL.genes <- grep(pattern = "^RPL", x = gene_names, value = TRUE)
+      
+      ribo_genes <- c(RPS.genes, RPL.genes)
+      if (length(ribo_genes) > 0) {
+        blacklist.genes <- c(blacklist.genes, ribo_genes)
+        send_message(sprintf("Added %d ribosomal genes to blacklist (RPS: %d, RPL: %d).", 
+                             length(ribo_genes), length(RPS.genes), length(RPL.genes)))
+      } else {
+        send_message("No ribosomal genes found with patterns ^RPS or ^RPL")
+      }
+    }, error = function(e) {
+      send_message(paste("Error finding ribosomal genes:", e$message))
+    })
+  }
+  
+  # Remove duplicates and ensure character vector
+  if (length(blacklist.genes) > 0) {
+    blacklist.genes <- unique(as.character(blacklist.genes))
+    
+    # Filter to only genes that actually exist in the count matrix
+    existing_genes <- blacklist.genes[blacklist.genes %in% gene_names]
+    missing_genes <- setdiff(blacklist.genes, existing_genes)
+    
+    if (length(missing_genes) > 0) {
+      send_message(sprintf("Warning: %d blacklisted genes not found in count matrix.", length(missing_genes)))
+    }
+    
+    blacklist.genes <- existing_genes
+    send_message(sprintf("Final blacklist contains %d genes present in the dataset.", length(blacklist.genes)))
+  } else {
+    send_message("No valid genes added to blacklist.")
   }
   
   return(blacklist.genes)
@@ -161,29 +297,77 @@ generate_GeneBlacklist <- function(count_matrix, selected_blacklist, send_messag
 
 #' Function to form row and column sums and means on count matrix from Seurat object.
 #'
+#' Summarized group of count matrix for LSI
+#' 
 #' @param mat raw count matrix.
 #' @param groups which groups to summarize.
 #' @param na.rm whether to remove any NA from matrix.
 #' @param sparse whether to use sparse matrix conversion.
 #' @export
-
+#'
 generate_GroupSums <- function(mat, groups = NULL, na.rm = TRUE, sparse = FALSE){
-  stopifnot(!is.null(groups))
-  stopifnot(length(groups) == ncol(mat))
-  gm <- lapply(unique(groups), function(x) {
-    if (sparse) {
-      Matrix::rowSums(mat[, which(groups == x), drop = F], na.rm = na.rm)
+  # Input validation
+  if (is.null(groups)) {
+    stop("groups parameter cannot be NULL")
+  }
+  
+  if (length(groups) != ncol(mat)) {
+    stop(sprintf("Length of groups (%d) must equal number of columns in matrix (%d)", 
+                 length(groups), ncol(mat)))
+  }
+  
+  # Ensure groups is a proper vector
+  groups <- as.character(groups)
+  unique_groups <- unique(groups)
+  
+  if (length(unique_groups) == 0) {
+    stop("No unique groups found")
+  }
+  
+  # Calculate group sums
+  tryCatch({
+    gm <- lapply(unique_groups, function(x) {
+      group_indices <- which(groups == x)
+      if (length(group_indices) == 0) {
+        return(rep(0, nrow(mat)))
+      }
+      
+      # Subset matrix for this group
+      group_mat <- mat[, group_indices, drop = FALSE]
+      
+      if (sparse || is(mat, "sparseMatrix")) {
+        Matrix::rowSums(group_mat, na.rm = na.rm)
+      } else {
+        rowSums(group_mat, na.rm = na.rm)
+      }
+    })
+    
+    # Convert list to matrix
+    gm <- do.call(cbind, gm)
+    colnames(gm) <- unique_groups
+    
+    # Ensure rownames are preserved
+    if (!is.null(rownames(mat))) {
+      rownames(gm) <- rownames(mat)
     }
-    else {
-      rowSums(mat[, which(groups == x), drop = F], na.rm = na.rm)
+    
+    return(gm)
+    
+  }, error = function(e) {
+    message(paste("Error in generate_GroupSums:", e$message))
+    # Return a fallback matrix
+    fallback_mat <- matrix(0, nrow = nrow(mat), ncol = length(unique_groups))
+    colnames(fallback_mat) <- unique_groups
+    if (!is.null(rownames(mat))) {
+      rownames(fallback_mat) <- rownames(mat)
     }
-  }) %>% Reduce("cbind", .)
-  colnames(gm) <- unique(groups)
-  return(gm)
+    return(fallback_mat)
+  })
 }
 
-
 #' Function to run iterative LSI on a Seurat object.
+#'
+#' Runs the entire interative LSI pipeline on a seurat object.
 #'
 #' @param seurat_obj Seurat object.
 #' @param rawCounts count matrix from Seurat object.
@@ -346,8 +530,6 @@ process_LSI <- function(seurat_obj,
 #' @param binarize whether to binarize dgCMatrix class.
 #' @return list containing LSI results.
 #' @export
-
-
 LSI_function <- function(mat, nComponents, binarize = FALSE){
   
   if(binarize){

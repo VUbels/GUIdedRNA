@@ -17,5 +17,5 @@ generate_GeneBlacklist(count_matrix, selected_blacklist, send_message = NULL)
 vector of gene names to blacklist.
 }
 \description{
-Function to generate a gene blacklist based on user selections.
+Generates blacklisted genes to pass through LSI clustering
 }

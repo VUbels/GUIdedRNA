@@ -16,5 +16,5 @@ generate_GroupSums(mat, groups = NULL, na.rm = TRUE, sparse = FALSE)
 \item{sparse}{whether to use sparse matrix conversion.}
 }
 \description{
-Function to form row and column sums and means on count matrix from Seurat object.
+Summarized group of count matrix for LSI
 }

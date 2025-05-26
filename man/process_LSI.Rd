@@ -48,5 +48,5 @@ process_LSI(
 list containing updated Seurat object and LSI results.
 }
 \description{
-Function to run iterative LSI on a Seurat object.
+Runs the entire interative LSI pipeline on a seurat object.
 }

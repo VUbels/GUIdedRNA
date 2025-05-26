@@ -17,5 +17,5 @@ generate_VariableGenes(mat, nvar = 2000, blacklist = NULL)
 Variable list of genes
 }
 \description{
-Work around for staying with sparse matrix format in seurat object to reduce object size.
+Generates variable genes from matrix
 }

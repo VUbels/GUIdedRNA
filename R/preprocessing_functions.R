@@ -45,7 +45,6 @@ assign_ExpectedDoublet <- function(val) {
 #' @param seurat_list List of Seurat objects
 #' @export
 
-
 preprocess_DoubletRemoval <- function(seurat_list) {
   
   processed_list <- list()
@@ -144,7 +143,7 @@ preprocess_DoubletRemoval <- function(seurat_list) {
     doublet_percentage <- round(100 * doublets_removed / nPreDoublet, 2)
     
     send_message(sprintf("  - Dataset %s: Removed %s doublet cells (%.2f%%). %s cells remaining.", 
-                        dataset, doublets_removed, doublet_percentage, nPostDoublet))
+                         dataset, doublets_removed, doublet_percentage, nPostDoublet))
     
     processed_list[[dataset]] <- seurat_obj
   }
@@ -186,17 +185,56 @@ preprocess_AmbientRNA <- function(seurat_list) {
     counts <- SeuratObject::GetAssayData(object = seurat_obj, layer = "counts")
     clusters <- Idents(seurat_obj) %>% as.numeric()
     
-    # Run on only expressed genes
-    x <- counts[rowSums(counts)>0,]
-    cell_count <- dim(x)[2]
-    gene_count <- dim(x)[1]
+    # Add debugging information
+    send_message(sprintf("  - Original matrix: %d genes x %d cells, class: %s", 
+                         nrow(counts), ncol(counts), class(counts)[1]))
+    
+    # SPECIFIC FIX: Check for and handle the matrix dimension issue
+    # Use Matrix::rowSums for sparse matrices to avoid dimension issues
+    if (is(counts, "sparseMatrix") || is(counts, "dgCMatrix")) {
+      expressed_genes <- Matrix::rowSums(counts) > 0
+    } else {
+      expressed_genes <- rowSums(counts) > 0
+    }
+    
+    send_message(sprintf("  - Found %d genes with expression > 0", sum(expressed_genes)))
+    
+    # CRITICAL: Use drop = FALSE to prevent matrix->vector conversion
+    x <- counts[expressed_genes, , drop = FALSE]
+    
+    # Additional safety check
+    if (is.null(dim(x)) || length(dim(x)) < 2) {
+      send_message(sprintf("  - ERROR: Matrix lost dimensions after filtering. Class: %s, Dimensions: %s", 
+                           class(x)[1], paste(dim(x), collapse = "x")))
+      send_message(paste("  - Skipping", dataset, "due to dimension error"))
+      processed_list[[dataset]] <- seurat_obj
+      next
+    }
+    
+    cell_count <- ncol(x)
+    gene_count <- nrow(x)
     send_message(sprintf("  - Running decontX on %s cells with %s non-zero genes...", cell_count, gene_count))
+    
+    # Additional debugging - let's see exactly what we're passing to decontX
+    send_message(sprintf("  - Matrix x: class=%s, dims=%s, sparse=%s", 
+                         class(x)[1], paste(dim(x), collapse = "x"), is(x, "sparseMatrix")))
+    send_message(sprintf("  - Clusters: length=%d, class=%s, range=%s", 
+                         length(clusters), class(clusters), paste(range(clusters), collapse = "-")))
     
     decon <- tryCatch({
       decontX::decontX(x, z=clusters, verbose=FALSE)
     }, error = function(e) {
       send_message(paste("  - Error in decontX:", e$message))
-      return(NULL)
+      send_message(paste("  - Full error details:", toString(e)))
+      
+      # Try without clusters as fallback
+      send_message(paste("  - Attempting decontX without predefined clusters..."))
+      tryCatch({
+        decontX::decontX(x, z=NULL, verbose=FALSE)
+      }, error = function(e2) {
+        send_message(paste("  - Fallback also failed:", e2$message))
+        return(NULL)
+      })
     })
     
     if (is.null(decon)) {
@@ -208,8 +246,12 @@ preprocess_AmbientRNA <- function(seurat_list) {
     send_message(paste("  - Applying decontX results to Seurat object for", dataset))
     # Save desired information back to Seurat Object
     newCounts <- decon$decontXcounts
+    
     # Add back unexpressed genes and sort according to original counts
-    newCounts <- rbind(newCounts, counts[rowSums(counts)==0,])[rownames(counts),]
+    # CRITICAL: Use drop = FALSE here too
+    unexpressed_counts <- counts[!expressed_genes, , drop = FALSE]
+    newCounts <- rbind(newCounts, unexpressed_counts)[rownames(counts), , drop = FALSE]
+    
     seurat_obj[["RNA"]]@layers$counts <- as(round(newCounts), "sparseMatrix")
     seurat_obj$estConp <- decon$contamination
     
@@ -258,7 +300,7 @@ remove_lowRNA <- function(seurat_list) {
     cells_removed_pct <- round(100 * cells_removed / nPreDecon, 2)
     
     send_message(sprintf("  - Dataset %s: Removed %s cells with too little RNA (%.2f%%). %s cells remaining.", 
-                        dataset, cells_removed, cells_removed_pct, nPostDecon))
+                         dataset, cells_removed, cells_removed_pct, nPostDecon))
     
     # Store in processed list
     processed_list[[dataset]] <- seurat_obj
