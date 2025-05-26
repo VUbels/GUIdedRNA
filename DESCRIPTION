@@ -9,7 +9,7 @@ Description: A comprehensive Shiny application for guided RNA-seq analysis
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.3.2
+RoxygenType: 7.3.2
 Depends: 
     R (>= 4.0.0)
 Imports:
@@ -48,13 +48,14 @@ Remotes:
     bioc::GenomicFeatures,
     bioc::org.Hs.eg.db,
     bioc::TxDb.Hsapiens.UCSC.hg38.knownGene,
-    bioc::edgeR
+    bioc::edgeR,
+    chris-mcginnis-ucsf/DoubletFinder
 Suggests:
     testthat (>= 3.0.0),
     knitr,
     rmarkdown
 VignetteBuilder: knitr
 URL: https://github.com/VUbels/GUIdedRNA
-BugReports: https://github.com/VUbels/GUIdedRNA/Issues
-Remotes:
-    chris-mcginnis-ucsf/DoubletFinder
+BugReports: https://github.com/VUbels/GUIdedRNA/issues
+RoxygenNote: 7.3.2
+
