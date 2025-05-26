@@ -41,6 +41,14 @@ Imports:
     AnnotationDbi,
     sparseMatrixStats,
     matrixStats
+Remotes:
+    bioc::sparseMatrixStats,
+    bioc::AnnotationDbi,
+    bioc::GenomicRanges,
+    bioc::GenomicFeatures,
+    bioc::org.Hs.eg.db,
+    bioc::TxDb.Hsapiens.UCSC.hg38.knownGene,
+    bioc::edgeR
 Suggests:
     testthat (>= 3.0.0),
     knitr,
