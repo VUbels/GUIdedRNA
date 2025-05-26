@@ -1,17 +1,31 @@
 version: '3.8'
-
 services:
   guidedrna:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "3838:3838"
     volumes:
+      # Default data and output directories
       - ./data:/data:rw
       - ./output:/output:rw
+      
+      # Mount Windows drives - adjust these paths based on your system
+      - /mnt:/host_mnt:ro
+      - /mnt/c:/mnt/c:ro
+      - /mnt/d:/mnt/d:ro
+      
+      # Mount home directory
+      - /home:/host_home:ro
+      
     environment:
       - SHINY_LOG_STDERR=1
       - R_LIBS_USER=/usr/local/lib/R/site-library
+      # Set user ID to avoid permission issues
+      - PUID=1000
+      - PGID=1000
     restart: unless-stopped
     container_name: guidedrna-app
+    # Run as the current user to avoid permission issues
+    user: "1000:1000"

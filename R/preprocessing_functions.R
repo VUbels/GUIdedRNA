@@ -182,7 +182,7 @@ preprocess_AmbientRNA <- function(seurat_list) {
       seurat_obj <- Seurat::RunUMAP(seurat_obj, dims = 1:10)
     }
     
-    counts <- SeuratObject::GetAssayData(object = seurat_obj, layer = "counts")
+    counts <- Seurat::GetAssayData(object = seurat_obj, layer = "counts")
     clusters <- Idents(seurat_obj) %>% as.numeric()
     
     # Add debugging information

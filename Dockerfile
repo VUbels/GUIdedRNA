@@ -116,39 +116,37 @@ RUN mkdir -p /data /output
 RUN chmod 755 /data /output
 
 # Create a simple startup script
-RUN cat > /start.sh << 'EOF'
-#!/bin/bash
-echo "Starting GUIdedRNA application..."
-echo "Loading required libraries..."
-
-R --slave << 'RSCRIPT'
-library(shiny)
-library(shinydashboard)
-library(Matrix)
-library(Seurat)
-library(dplyr)
-library(ggplot2)
-library(DT)
-cat("Core libraries loaded successfully\n")
-
-library(GUIdedRNA)
-cat("GUIdedRNA package loaded successfully\n")
-
-app_dir <- system.file("shiny-app", package = "GUIdedRNA")
-if(app_dir == "" || !dir.exists(app_dir)) {
-    stop("App directory not found. Package installation may have failed.")
-}
-cat("App directory found:", app_dir, "\n")
-
-if(exists("launch_GUIdedRNA")) {
-    cat("Starting Shiny application...\n")
-    launch_GUIdedRNA(port = 3838, host = "0.0.0.0", launch.browser = FALSE)
-} else {
-    cat("Launching app directly...\n") 
-    shiny::runApp(appDir = app_dir, port = 3838, host = "0.0.0.0", launch.browser = FALSE)
-}
-RSCRIPT
-EOF
+RUN echo '#!/bin/bash' > /start.sh && \
+    echo 'echo "Starting GUIdedRNA application..."' >> /start.sh && \
+    echo 'echo "Loading required libraries..."' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo 'R --slave << '\''RSCRIPT'\''' >> /start.sh && \
+    echo 'library(shiny)' >> /start.sh && \
+    echo 'library(shinydashboard)' >> /start.sh && \
+    echo 'library(Matrix)' >> /start.sh && \
+    echo 'library(Seurat)' >> /start.sh && \
+    echo 'library(dplyr)' >> /start.sh && \
+    echo 'library(ggplot2)' >> /start.sh && \
+    echo 'library(DT)' >> /start.sh && \
+    echo 'cat("Core libraries loaded successfully\\n")' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo 'library(GUIdedRNA)' >> /start.sh && \
+    echo 'cat("GUIdedRNA package loaded successfully\\n")' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo 'app_dir <- system.file("shiny-app", package = "GUIdedRNA")' >> /start.sh && \
+    echo 'if(app_dir == "" || !dir.exists(app_dir)) {' >> /start.sh && \
+    echo '    stop("App directory not found. Package installation may have failed.")' >> /start.sh && \
+    echo '}' >> /start.sh && \
+    echo 'cat("App directory found:", app_dir, "\\n")' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo 'if(exists("launch_GUIdedRNA")) {' >> /start.sh && \
+    echo '    cat("Starting Shiny application...\\n")' >> /start.sh && \
+    echo '    launch_GUIdedRNA(port = 3838, host = "0.0.0.0", launch.browser = FALSE)' >> /start.sh && \
+    echo '} else {' >> /start.sh && \
+    echo '    cat("Launching app directly...\\n")' >> /start.sh && \
+    echo '    shiny::runApp(appDir = app_dir, port = 3838, host = "0.0.0.0", launch.browser = FALSE)' >> /start.sh && \
+    echo '}' >> /start.sh && \
+    echo 'RSCRIPT' >> /start.sh
 
 RUN chmod +x /start.sh
 
