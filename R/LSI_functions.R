@@ -160,9 +160,7 @@ run_SparseLogX <- function(spmat, logtype="log2", scale=FALSE, scaleFactor=10^4)
   return(spmat)
 }
 
-#' Function to generate a gene blacklist based on user selections.
-#'
-#' Generates blacklisted genes to pass through LSI clustering
+#' Function to generate a gene blacklist based on user selections
 #'
 #' @param count_matrix raw count matrix from Seurat object.
 #' @param selected_blacklist vector of selected blacklist options from UI.
@@ -172,7 +170,7 @@ run_SparseLogX <- function(spmat, logtype="log2", scale=FALSE, scaleFactor=10^4)
 #' 
 generate_GeneBlacklist <- function(count_matrix, selected_blacklist, send_message = NULL) {
   # Initialize empty blacklist
-  blacklist.genes <- c()
+  blacklist.genes <- character(0)
   
   # If no message function provided, create a dummy one
   if (is.null(send_message)) {
@@ -180,6 +178,17 @@ generate_GeneBlacklist <- function(count_matrix, selected_blacklist, send_messag
       message(msg)
     }
   }
+  
+  pkg_available <- c(
+    "TxDb" = requireNamespace("TxDb.Hsapiens.UCSC.hg38.knownGene", quietly = TRUE),
+    "GenomicFeatures" = requireNamespace("GenomicFeatures", quietly = TRUE),
+    "org.Hs.eg.db" = requireNamespace("org.Hs.eg.db", quietly = TRUE),
+    "AnnotationDbi" = requireNamespace("AnnotationDbi", quietly = TRUE),
+    "GenomicRanges" = requireNamespace("GenomicRanges", quietly = TRUE)
+  )
+  
+  send_message(paste("Package availability:", paste(names(pkg_available), pkg_available, sep="=", collapse=", ")))
+  
   
   # Safety check: ensure count_matrix has rownames
   if (is.null(rownames(count_matrix))) {
@@ -219,39 +228,62 @@ generate_GeneBlacklist <- function(count_matrix, selected_blacklist, send_messag
   # Add sex chromosome genes if selected
   if("blacklist_sexgenes" %in% selected_blacklist) {
     tryCatch({
-      # Check if required packages are available
-      if (!requireNamespace("TxDb.Hsapiens.UCSC.hg38.knownGene", quietly = TRUE) ||
-          !requireNamespace("GenomicFeatures", quietly = TRUE) ||
-          !requireNamespace("org.Hs.eg.db", quietly = TRUE)) {
-        send_message("Required packages for sex chromosome genes not available. Skipping.")
-      } else {
-        # Extract sex chromosome genes
-        txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene::TxDb.Hsapiens.UCSC.hg38.knownGene
-        geneGR <- GenomicFeatures::genes(txdb)
-        sexGenesGR <- geneGR[GenomicRanges::seqnames(geneGR) %in% c("chrY", "chrX")]
-        
-        if (length(sexGenesGR) > 0) {
-          matchedGeneSymbols <- AnnotationDbi::select(org.Hs.eg.db::org.Hs.eg.db,
-                                                      keys = sexGenesGR$gene_id,
-                                                      columns = c("ENTREZID", "SYMBOL"),
-                                                      keytype = "ENTREZID")
-          
-          # Filter out NA symbols and ensure character vector
-          sexChr.genes <- as.character(matchedGeneSymbols$SYMBOL)
-          sexChr.genes <- sexChr.genes[!is.na(sexChr.genes)]
-          
-          if (length(sexChr.genes) > 0) {
-            blacklist.genes <- c(blacklist.genes, sexChr.genes)
-            send_message(sprintf("Added %d X/Y chromosomal genes to blacklist.", length(sexChr.genes)))
-          } else {
-            send_message("No valid sex chromosome gene symbols found.")
-          }
-        } else {
-          send_message("No sex chromosome genes found in annotation.")
+      # Load required packages explicitly
+      if (!requireNamespace("TxDb.Hsapiens.UCSC.hg38.knownGene", quietly = TRUE)) {
+        send_message("TxDb.Hsapiens.UCSC.hg38.knownGene package not available. Installing...")
+        if (!requireNamespace("BiocManager", quietly = TRUE)) {
+          install.packages("BiocManager")
         }
+        BiocManager::install("TxDb.Hsapiens.UCSC.hg38.knownGene")
+      }
+      
+      if (!requireNamespace("GenomicFeatures", quietly = TRUE)) {
+        send_message("GenomicFeatures package not available. Installing...")
+        BiocManager::install("GenomicFeatures")
+      }
+      
+      if (!requireNamespace("org.Hs.eg.db", quietly = TRUE)) {
+        send_message("org.Hs.eg.db package not available. Installing...")
+        BiocManager::install("org.Hs.eg.db")
+      }
+      
+      # Load the packages
+      library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+      library(GenomicFeatures)
+      library(org.Hs.eg.db)
+      library(AnnotationDbi)
+      
+      # Extract sex chromosome genes
+      txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene::TxDb.Hsapiens.UCSC.hg38.knownGene
+      geneGR <- GenomicFeatures::genes(txdb)
+      
+      seqnames_clean <- as.vector(GenomicRanges::seqnames(geneGR))
+      sex_mask <- seqnames_clean %in% c("chrY", "chrX")
+      sexGenesGR <- geneGR[sex_mask]
+      
+      
+      if (length(sexGenesGR) > 0) {
+        matchedGeneSymbols <- AnnotationDbi::select(org.Hs.eg.db::org.Hs.eg.db,
+                                                    keys = sexGenesGR$gene_id,
+                                                    columns = c("ENTREZID", "SYMBOL"),
+                                                    keytype = "ENTREZID")
+        
+        # Filter out NA symbols and ensure character vector
+        sexChr.genes <- as.character(matchedGeneSymbols$SYMBOL)
+        sexChr.genes <- sexChr.genes[!is.na(sexChr.genes)]
+        
+        if (length(sexChr.genes) > 0) {
+          blacklist.genes <- c(blacklist.genes, sexChr.genes)
+          send_message(sprintf("Added %d X/Y chromosomal genes to blacklist.", length(sexChr.genes)))
+        } else {
+          send_message("No valid sex chromosome gene symbols found.")
+        }
+      } else {
+        send_message("No sex chromosome genes found in annotation.")
       }
     }, error = function(e) {
       send_message(paste("Error finding sex chromosome genes:", e$message))
+      send_message("This may be due to missing annotation packages. Try installing: BiocManager::install(c('TxDb.Hsapiens.UCSC.hg38.knownGene', 'GenomicFeatures', 'org.Hs.eg.db'))")
     })
   }
   
@@ -545,7 +577,7 @@ LSI_function <- function(mat, nComponents, binarize = FALSE){
   # Check for zero row sums and remove those rows
   if(any(rowSm == 0)) {
     message(sprintf("Removing %d features with zero counts...", sum(rowSm == 0)))
-    mat <- mat[rowSm > 0, ]
+    mat <- mat[rowSm > 0, , drop = FALSE]
     rowSm <- rowSm[rowSm > 0]
   }
   
@@ -554,8 +586,14 @@ LSI_function <- function(mat, nComponents, binarize = FALSE){
   start <- Sys.time()
   scaleTo <- 10^4
   
+  message("Calculating TF using Matrix transpose...")
+  
   # Add a small epsilon to avoid division by zero
-  tf <- t(t(mat) / (colSm + 1e-10))
+  # Use Matrix::t() instead of base::t()
+  tf <- Matrix::t(Matrix::t(mat) / (colSm + 1e-10))
+  
+  message("TF calculation successful")
+  
   idf <- as(ncol(mat) / rowSm, "sparseVector")
   tfidf <- as(Matrix::Diagonal(x=as.vector(idf)), "sparseMatrix") %*% tf
   
@@ -583,7 +621,7 @@ LSI_function <- function(mat, nComponents, binarize = FALSE){
     
     svd <- irlba::irlba(tfidf, nv=nComponents, nu=nComponents)
     svdDiag <- Matrix::diag(x=svd$d)
-    matSVD <- t(svdDiag %*% t(svd$v))
+    matSVD <- Matrix::t(svdDiag %*% Matrix::t(svd$v))  # Use Matrix::t() here too
     rownames(matSVD) <- colnames(mat)
     colnames(matSVD) <- paste0("PC", seq_len(ncol(matSVD)))
     
@@ -633,4 +671,3 @@ LSI_function <- function(mat, nComponents, binarize = FALSE){
     )
   )
 }
-

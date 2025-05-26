@@ -2,7 +2,7 @@
 % Please edit documentation in R/LSI_functions.R
 \name{generate_GeneBlacklist}
 \alias{generate_GeneBlacklist}
-\title{Function to generate a gene blacklist based on user selections.}
+\title{Function to generate a gene blacklist based on user selections}
 \usage{
 generate_GeneBlacklist(count_matrix, selected_blacklist, send_message = NULL)
 }
@@ -17,5 +17,5 @@ generate_GeneBlacklist(count_matrix, selected_blacklist, send_message = NULL)
 vector of gene names to blacklist.
 }
 \description{
-Generates blacklisted genes to pass through LSI clustering
+Function to generate a gene blacklist based on user selections
 }
