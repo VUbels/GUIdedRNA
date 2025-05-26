@@ -1,4 +1,3 @@
-# global.R
 # inst/shiny-app/global.R
 library(GUIdedRNA)
 library(shiny)
@@ -13,6 +12,7 @@ library(dplyr)
 library(irlba)
 library(edgeR)
 library(DoubletFinder)
+library(celda)
 library(decontX)
 library(Seurat)
 library(TxDb.Hsapiens.UCSC.hg38.knownGene)
@@ -22,6 +22,12 @@ library(plyr)
 library(SeuratObject)
 library(fs)
 library(R6)
+library(harmony)
+library(GenomicFeatures)
+library(GenomicRanges)
+library(AnnotationDbi)
+library(sparseMatrixStats)
+library(matrixStats)
 
 # Global message queue - using a hidden environment variable for storage
 .message_env <- new.env()

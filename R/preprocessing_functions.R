@@ -2,6 +2,7 @@
 #'
 #' Function returns the expected doublet rate based on 10X data dependent on cell count rather than flat rate.
 #' Increasing cell count in smaller samples.
+#' @export
 
 assign_ExpectedDoublet <- function(val) {
   # Initialize expected_doublet value
@@ -42,6 +43,7 @@ assign_ExpectedDoublet <- function(val) {
 #' Returns Seurat object with TRUE/FALSE assignment to duplicate cells in META data.
 #' 
 #' @param seurat_list List of Seurat objects
+#' @export
 
 
 preprocess_DoubletRemoval <- function(seurat_list) {
@@ -154,7 +156,7 @@ preprocess_DoubletRemoval <- function(seurat_list) {
 #' Removes ambient RNA from cells using DecontX pipeline
 #'
 #' @param seurat_list List of Seurat objects
-
+#' @export
 
 preprocess_AmbientRNA <- function(seurat_list) {
   
@@ -226,6 +228,7 @@ preprocess_AmbientRNA <- function(seurat_list) {
 #' Removes cells with deficient RNA after Ambient RNA removal
 #'
 #' @param seurat_list List of Seurat objects
+#' @export
 
 remove_lowRNA <- function(seurat_list) {
   

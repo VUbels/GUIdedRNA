@@ -31,6 +31,8 @@ cd GUIdedRNA
 # Quick deployment
 chmod +x deploy.sh
 ./deploy.sh
+
+# Then open http://localhost:3838
 ```
 
 ## Usage

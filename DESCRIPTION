@@ -9,7 +9,7 @@ Description: A comprehensive Shiny application for guided RNA-seq analysis
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.3.2
+RoxygenType: 7.3.2
 Depends: 
     R (>= 4.0.0)
 Imports:
@@ -19,6 +19,7 @@ Imports:
     shinyjs,
     shinycssloaders,
     DT,
+    plyr,
     ggplot2,
     Matrix,
     dplyr,
@@ -26,11 +27,11 @@ Imports:
     edgeR,
     DoubletFinder,
     celda,
+    decontX,
     Seurat (>= 5.0.0),
     TxDb.Hsapiens.UCSC.hg38.knownGene,
     org.Hs.eg.db,
     cowplot,
-    plyr,
     SeuratObject,
     fs,
     R6,
@@ -47,3 +48,5 @@ Suggests:
 VignetteBuilder: knitr
 URL: https://github.com/VUbels/GUIdedRNA
 BugReports: https://github.com/VUbels/GUIdedRNA/Issues
+Remotes:
+    chris-mcginnis-ucsf/DoubletFinder
