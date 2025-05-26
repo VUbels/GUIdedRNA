@@ -10,6 +10,7 @@
 #' @param colorLims colour limits for minimal and maximal percentage based on expression data.
 #' @param na.value colour for cells not expression gene.
 #' @param useRaster raster plot.
+#' @export
 
 plotUMAP <- function(df, dataType = "qualitative", cmap = NULL, covarLabel = "", point_size=0.5, 
                      namedColors=FALSE, plotTitle=NULL, colorLims=NULL, na.value="grey35", useRaster=TRUE){

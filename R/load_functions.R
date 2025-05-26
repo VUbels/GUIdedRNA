@@ -1,3 +1,9 @@
+#' Variable gene function selection enabling.
+#'
+#' @description Reads folder, or folder of folder or 10X files to create Seurat objects
+#' @returns List of seurat objects
+#' @export
+
 read_folder <- function(folder_path) {
   # Initialize a list to store Seurat objects
   seurat_list <- list()

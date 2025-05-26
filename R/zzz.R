@@ -1,5 +1,6 @@
 #' @import shiny
 #' @import shinydashboard
+#' @export
 .onLoad <- function(libname, pkgname) {
   packageStartupMessage("Loading GUIdedRNA package...")
 }
