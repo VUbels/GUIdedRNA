@@ -18,7 +18,12 @@ A comprehensive Shiny application for guided RNA-seq analysis including quality 
 # Install devtools if you haven't already
 install.packages("devtools")
 
+# Install BiocManager dependencies
+
+BiocManager::install(c("sparseMatrixStats", "AnnotationDbi", "edgeR", "GenomicRanges", "GenomicFeatures", "org.Hs.eg.db", "TxDb.Hsapiens.UCSC.hg38.knownGene", "celda", "decontX"))
+
 # Install GUIdedRNA
+devtools::install_github("chris-mcginnis-ucsf/DoubletFinder")
 devtools::install_github("VUbels/GUIdedRNA")
 ```
 
