@@ -1609,7 +1609,7 @@ server <- function(input, output, session) {
       merged_seurat$orig.ident <- as.factor(merged_seurat$orig.ident)
       
       send_message("Join count layers in seurat object")
-      merged_seurat <- Seurat::JoinLayers(merged_seurat)
+      merged_seurat <- SeuratObject::JoinLayers(merged_seurat)
       values$seurat <- merged_seurat
       values$preprocess_done <- TRUE
       
