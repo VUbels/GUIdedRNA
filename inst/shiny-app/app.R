@@ -1093,26 +1093,26 @@ server <- function(input, output, session) {
         # Check for both .gz and non-gz versions
         all_files <- list.files(subdir, full.names = TRUE)
   
-  # Find matrix file (looks for files containing "matrix" and ending with .mtx or .mtx.gz)
-  mtx_file <- NULL
-  mtx_candidates <- all_files[grepl("matrix.*\\.(mtx|mtx\\.gz)$", basename(all_files), ignore.case = TRUE)]
-  if (length(mtx_candidates) > 0) {
-    mtx_file <- mtx_candidates[1]  # Take the first match
-  }
-  
-  # Find features file (looks for files containing "features" or "genes" and ending with common extensions)
-  features_file <- NULL
-  features_candidates <- all_files[grepl("(features|genes).*\\.(tsv|tsv\\.gz|txt|txt\\.gz)$", basename(all_files), ignore.case = TRUE)]
-  if (length(features_candidates) > 0) {
-    features_file <- features_candidates[1]  # Take the first match
-  }
-  
-  # Find barcodes file (looks for files containing "barcodes" or "cells" and ending with common extensions)
-  cells_file <- NULL
-  cells_candidates <- all_files[grepl("(barcodes|cells).*\\.(tsv|tsv\\.gz|txt|txt\\.gz)$", basename(all_files), ignore.case = TRUE)]
-  if (length(cells_candidates) > 0) {
-    cells_file <- cells_candidates[1]  # Take the first match
-  }
+        # Find matrix file (looks for files containing "matrix" and ending with .mtx or .mtx.gz)
+          mtx_file <- NULL
+            mtx_candidates <- all_files[grepl("matrix.*\\.(mtx|mtx\\.gz)$", basename(all_files), ignore.case = TRUE)]
+        if (length(mtx_candidates) > 0) {
+            mtx_file <- mtx_candidates[1]  # Take the first match
+        }
+        
+        # Find features file (looks for files containing "features" or "genes" and ending with common extensions)
+          features_file <- NULL
+            features_candidates <- all_files[grepl("(features|genes).*\\.(tsv|tsv\\.gz|txt|txt\\.gz)$", basename(all_files), ignore.case = TRUE)]
+        if (length(features_candidates) > 0) {
+            features_file <- features_candidates[1]  # Take the first match
+        }
+        
+        # Find barcodes file (looks for files containing "barcodes" or "cells" and ending with common extensions)
+          cells_file <- NULL
+            cells_candidates <- all_files[grepl("(barcodes|cells).*\\.(tsv|tsv\\.gz|txt|txt\\.gz)$", basename(all_files), ignore.case = TRUE)]
+        if (length(cells_candidates) > 0) {
+            cells_file <- cells_candidates[1]  # Take the first match
+        }
         
         # Check if all files exist in the subdirectory
         if (!is.null(mtx_file) && !is.null(features_file) && !is.null(cells_file)) {
