@@ -13,7 +13,7 @@ A comprehensive Shiny application for guided RNA-seq analysis including quality 
 
 ## Installation
 
-### From GitHub
+### From GitHub to R IDE
 ```r
 # Install devtools if you haven't already
 install.packages("devtools")
