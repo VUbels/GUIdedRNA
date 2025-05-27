@@ -15,7 +15,7 @@ A comprehensive Shiny application for guided RNA-seq analysis including quality 
 
 ### Using R
 ```r
-# Install devtools if you haven't already
+# Install devtools
 install.packages("devtools")
 
 # Install BiocManager dependencies
