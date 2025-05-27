@@ -19,7 +19,7 @@ A comprehensive Shiny application for guided RNA-seq analysis including quality 
 install.packages("devtools")
 
 # Install BiocManager dependencies
-
+install.packages("BiocManager", repos = "https://cloud.r-project.org")
 BiocManager::install(c("sparseMatrixStats", "AnnotationDbi", "edgeR", "GenomicRanges", "GenomicFeatures", "org.Hs.eg.db", "TxDb.Hsapiens.UCSC.hg38.knownGene", "celda", "decontX"))
 
 # Install GUIdedRNA
