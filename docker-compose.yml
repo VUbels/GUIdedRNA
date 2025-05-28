@@ -5,27 +5,38 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3838:3838"
+      - "3939:3939"
     volumes:
       # Default data and output directories
       - ./data:/data:rw
       - ./output:/output:rw
       
-      # Mount Windows drives - adjust these paths based on your system
-      - /mnt:/host_mnt:ro
-      - /mnt/c:/mnt/c:ro
-      - /mnt/d:/mnt/d:ro
+      # Mount the entire host filesystem (Linux/Mac)
+      - /:/host_system:ro
       
-      # Mount home directory
-      - /home:/host_home:ro
+      # For Windows with WSL2 - mount Windows drives
+      - /mnt/c:/host_drives/C:ro
+      - /mnt/d:/host_drives/D:ro
+      - /mnt/e:/host_drives/E:ro
+      - /mnt/f:/host_drives/F:ro
+      - /mnt/g:/host_drives/G:ro
+      - /mnt/h:/host_drives/H:ro
+      
+      # Mount user home directory with write access for common use
+      - ${HOME}:/host_home:rw
+      
+      # Mount common external drive locations
+      - /media:/host_media:ro
+      - /mnt:/host_mnt:ro
       
     environment:
       - SHINY_LOG_STDERR=1
       - R_LIBS_USER=/usr/local/lib/R/site-library
-      # Set user ID to avoid permission issues
-      - PUID=1000
-      - PGID=1000
+      # Remove user ID restrictions to avoid permission issues with mounted drives
     restart: unless-stopped
     container_name: guidedrna-app
-    # Run as the current user to avoid permission issues
-    user: "1000:1000"
+    # Don't restrict to specific user to allow access to various mounted drives
+    privileged: false
+    # Add capability to access mounted filesystems
+    cap_add:
+      - SYS_ADMIN
