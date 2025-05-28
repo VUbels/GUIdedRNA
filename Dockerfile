@@ -33,6 +33,7 @@ RUN R -e "BiocManager::install(c('SeuratObject', 'Seurat', 'harmony'), ask=FALSE
 
 # Install DoubletFinder with error handling (optional dependency)
 RUN R -e "tryCatch({ remotes::install_github('chris-mcginnis-ucsf/DoubletFinder', upgrade='never'); cat('DoubletFinder installed successfully\\n') }, error=function(e) { cat('DoubletFinder failed, will be installed by GUIdedRNA if needed\\n') })"
+RUN R -e "tryCatch({ remotes::install_github('immunogenomics/presto', upgrade='never'); cat('Presto installed successfully\\n') }, error=function(e) { cat('Presto failed, finding marker genes will use standard Wilcoxen\\n') })"
 
 # Install GUIdedRNA - let it handle its own dependencies
 RUN R -e "remotes::install_github('VUbels/GUIdedRNA', dependencies=TRUE, upgrade='never')"
