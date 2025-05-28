@@ -13,6 +13,7 @@ library(Seurat)
 library(harmony)
 library(edgeR)
 library(celda)
+library(presto)
 
 # Load problematic packages with error handling
 safe_library <- function(package) {
