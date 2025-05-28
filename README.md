@@ -11,9 +11,32 @@ A comprehensive Shiny application for guided RNA-seq analysis including quality 
 - **Integration**: Combine results from multiple analysis rounds
 - **Export**: Comprehensive results export in multiple formats
 
-## Installation
+### Installation and use for regular use
 
-### Using R
+**For Regular Users (Recommended)**
+No technical knowledge required - just double-click and wait!
+
+### Windows Users
+Download this repository (green "Code" button → "Download ZIP")
+Extract to your Desktop
+Double-click INSTALL_AND_RUN.bat
+Wait 5-15 minutes → Browser opens automatically!
+If browser does not open simply go to http://localhost:3838
+
+### Mac/Linux Users
+Download this repository (green "Code" button → "Download ZIP")
+Extract to your Desktop
+Double-click INSTALL_AND_RUN.sh
+Wait 5-15 minutes → Browser opens automatically!
+If browser does not open simply go to http://localhost:3838
+
+### For Advanced Users & Developers
+WSL2 Users (Windows Subsystem for Linux)
+If you need Windows drive access and advanced volume mounting:
+If working through command line simply open in any browser at http://localhost:3838
+
+### Installation of GUIdedRNA library and use through IDE
+
 ```r
 # Install devtools
 install.packages("devtools")
@@ -25,19 +48,6 @@ BiocManager::install(c("sparseMatrixStats", "AnnotationDbi", "edgeR", "GenomicRa
 # Install GUIdedRNA
 devtools::install_github("chris-mcginnis-ucsf/DoubletFinder")
 devtools::install_github("VUbels/GUIdedRNA")
-```
-
-### Using Docker
-```bash
-# Clone the repository
-git clone https://github.com/VUbels/GUIdedRNA.git
-cd GUIdedRNA
-
-# Quick deployment
-chmod +x deploy.sh
-./deploy.sh
-
-# Then open http://localhost:3838
 ```
 
 ## Usage
