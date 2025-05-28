@@ -84,7 +84,7 @@ ui <- dashboardPage(
       consoleOutput.scrollTop = consoleOutput.scrollHeight;
     }
   };
-  
+
   shinyjs.appendToLSI1_Console = function(message) {
     var consoleOutput = document.getElementById('lsi1_ConsoleOutput');
     if(consoleOutput) {
@@ -109,8 +109,12 @@ ui <- dashboardPage(
       consoleOutput.appendChild(p);
       consoleOutput.scrollTop = consoleOutput.scrollHeight;
     }
+  };
+  
+    shinyjs.disableAmbient = function() {
+    $('#preprocessMethods input[value=\"ambient\"]').prop('disabled', true);
   }",    
-      functions = c("appendToConsole", "appendToLSI1_Console", "appendToLSI2_Console")
+      functions = c("appendToConsole", "appendToLSI1_Console", "appendToLSI2_Console", "disableAmbient")
     ),
     
     
@@ -488,7 +492,7 @@ ui <- dashboardPage(
               fluidRow(
                 column(12,
                        box(
-                         title = "Cell Type Assignment",
+                         title = "Initial Broad Cell Type Assignment",
                          width = NULL,
                          status = "primary",
                          solidHeader = TRUE,
@@ -681,7 +685,7 @@ ui <- dashboardPage(
               fluidRow(
                 column(12,
                        box(
-                         title = "Final Cell Type Assignment",
+                         title = "Final Specific Cell Type Assignment",
                          width = NULL,
                          status = "primary",
                          solidHeader = TRUE,
@@ -1562,12 +1566,21 @@ server <- function(input, output, session) {
     
     # Plot using ggplot2
     features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")
+
+# Define y-axis limits for each feature
+    ylim_values <- list(
+      "nFeature_RNA" = c(0, 10000),
+      "nCount_RNA" = c(0, 100000),
+      "percent.mt" = c(0, 100)
+    )
+
     plots <- lapply(features, function(feat) {
       ggplot(meta_combined, aes_string(x = "dataset", y = feat, fill = "dataset")) +
         geom_violin(trim = FALSE) +
         theme_minimal() +
         theme(legend.position = "none") +
         theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+        ylim(ylim_values[[feat]]) +
         ggtitle(feat)
     })
     
@@ -1612,6 +1625,10 @@ server <- function(input, output, session) {
     updateTabItems(session, "tabs", "preprocess")
   })
  
+  observe({
+    js$disableAmbient()
+  })
+
   # Preprocessing logic triggered by commit button
   observeEvent(input$commitPreprocessing, {
     req(values$seurat_list)
@@ -1852,101 +1869,133 @@ server <- function(input, output, session) {
   # Observer to initialize UI components when Seurat object is loaded
   observeEvent(values$seurat, {
     req(values$seurat)
-    
+   
     # Get all features for gene selection - INDEPENDENT of marker analysis
     all_features <- rownames(values$seurat)
-    
+   
     # Update feature selection with ALL genes from the dataset
     updateSelectizeInput(session, "featureSelect",
                          choices = all_features,
                          server = TRUE)
-    
+   
     # Get all metadata columns
     meta_columns <- colnames(values$seurat@meta.data)
     relevant_columns <- c("seurat_clusters", "orig.ident")
-    
-    # Add cell_type if it exists
-    if("cell_type" %in% meta_columns) {
-      relevant_columns <- c(relevant_columns, "cell_type")
-    }
-    
+   
+    # Check for cell_type column with specific error handling
+    tryCatch({
+        # Add cell_type if it exists
+        if("cell_type" %in% meta_columns) {
+            relevant_columns <- c(relevant_columns, "cell_type")
+        } else {
+            # Check if user is trying to access cell_type functionality
+            # You might want to set a flag or show a notification here
+            # For now, we'll continue without cell_type
+            message("cell_type column not found - user should run Find Markers first")
+        }
+    }, error = function(e) {
+        # Show specific error message
+        showNotification(
+            "Please run Find Markers before annotating clusters",
+            type = "error",
+            duration = 5
+        )
+        return()
+    })
+   
     # Add any custom columns from sample information tab
     if(!is.null(values$added_columns)) {
-      relevant_columns <- c(relevant_columns, values$added_columns)
+        relevant_columns <- c(relevant_columns, values$added_columns)
     }
-    
+   
     # Filter to only include columns that exist
     relevant_columns <- relevant_columns[relevant_columns %in% meta_columns]
-    
+   
     # Update the Color By dropdown
-    updateSelectInput(session, "umapGroupBy", 
-                      choices = relevant_columns, 
+    updateSelectInput(session, "umapGroupBy",
+                      choices = relevant_columns,
                       selected = "seurat_clusters")
-    
+   
     # Create split by options with "None" option first
     split_options <- c("None" = "none")
-    
+   
     # Add orig.ident if it exists
     if("orig.ident" %in% meta_columns) {
-      split_options <- c(split_options, "orig.ident" = "orig.ident")
+        split_options <- c(split_options, "orig.ident" = "orig.ident")
     }
-    
+   
     # Add cell_type if it exists
     if("cell_type" %in% meta_columns) {
-      split_options <- c(split_options, "cell_type" = "cell_type")
+        split_options <- c(split_options, "cell_type" = "cell_type")
     }
-    
+   
     # Add any custom columns for split.by
     if(!is.null(values$added_columns)) {
-      for(col in values$added_columns) {
-        if(col %in% meta_columns) {
-          split_options[col] <- col
+        for(col in values$added_columns) {
+            if(col %in% meta_columns) {
+                split_options[col] <- col
+            }
         }
-      }
     }
-    
+   
     # Update the Split By dropdown
-    updateSelectInput(session, "umapSplitBy", 
-                      choices = split_options, 
+    updateSelectInput(session, "umapSplitBy",
+                      choices = split_options,
                       selected = "none")
-  })
-  
-  #
-  output$markerTable <- renderDT({
+})
+
+# Alternative approach: Add a reactive that checks for prerequisites
+cell_type_available <- reactive({
+    req(values$seurat)
+    
+    if(!"cell_type" %in% colnames(values$seurat@meta.data)) {
+        showNotification(
+            "Please run Find Markers before annotating clusters",
+            type = "warning",
+            duration = 3
+        )
+        return(FALSE)
+    }
+    return(TRUE)
+})
+
+# Then use this reactive in other parts of your code where cell_type is needed
+# For example, in your marker table or annotation functions:
+output$markerTable <- renderDT({
     req(values$markers, input$clusterSelect)
     
     # Create a fresh dataframe with only the three needed columns
-    marker_genes <- values$markers %>% 
-      filter(cluster == input$clusterSelect) %>%
-      arrange(desc(avg_log2FC))
-    
+    marker_genes <- values$markers %>%
+        filter(cluster == input$clusterSelect) %>%
+        arrange(desc(avg_log2FC))
+   
     # Create a new dataframe with properly formatted columns
     display_table <- data.frame(
-      Gene = marker_genes$gene,
-      "Log2 FC" = round(marker_genes$avg_log2FC, 3),
-      "Adj. p-value" = sprintf("%.2f", marker_genes$p_val_adj),
-      stringsAsFactors = FALSE
+        Gene = marker_genes$gene,
+        "Log2 FC" = round(marker_genes$avg_log2FC, 3),
+        "Adj. p-value" = sprintf("%.2f", marker_genes$p_val_adj),
+        stringsAsFactors = FALSE
     )
-    
+   
     # Use the DT package explicitly to have more control
     DT::datatable(
-      display_table,
-      options = list(
-        dom = 't',  # table only, no search/pagination UI
-        scrollY = "350px",
-        scroller = TRUE,
-        paging = FALSE,
-        ordering = TRUE,
-        columnDefs = list(
-          list(targets = 0, className = "dt-left"),  # Gene column left aligned
-          list(targets = 1:2, className = "dt-right") # Numeric columns right aligned
-        )
-      ),
-      rownames = FALSE,  # No row names/indices
-      selection = "none", # No row selection
-      class = "compact stripe" # Styling
+        display_table,
+        options = list(
+            dom = 't',  # table only, no search/pagination UI
+            scrollY = "350px",
+            scroller = TRUE,
+            paging = FALSE,
+            ordering = TRUE,
+            columnDefs = list(
+                list(targets = 0, className = "dt-left"),  # Gene column left aligned
+                list(targets = 1:2, className = "dt-right") # Numeric columns right aligned
+            )
+        ),
+        rownames = FALSE,  # No row names/indices
+        selection = "none", # No row selection
+        class = "compact stripe" # Styling
     )
-  })
+})
   
   observeEvent(input$applyLabels, {
     req(values$seurat)
@@ -2003,6 +2052,19 @@ server <- function(input, output, session) {
   
   output$cellTypeUI <- renderUI({
     req(values$seurat)
+    
+    # Check if markers have been calculated for initial clustering
+  if(is.null(values$markers)) {
+    return(
+      div(
+        style = "text-align: center; padding: 40px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px;",
+        h4("Cell Type Assignment", style = "color: #6c757d; margin-bottom: 15px;"),
+        p("Please run Find Markers first before annotating clusters", 
+          style = "color: #6c757d; font-size: 16px;")
+      )
+    )
+  }
+    
     clusters <- sort(as.numeric(as.character(levels(Idents(values$seurat)))))
     
     tagList(
@@ -2617,8 +2679,20 @@ server <- function(input, output, session) {
   
   # Cell type UI for final clustering
   output$cellTypeUI_final <- renderUI({
-    req(current_subset())
+    req(current_subset(), input$subsetSelector)
     
+    # Check if markers have been calculated for final clustering
+  if(is.null(values$subset_markers) || is.null(values$subset_markers[[input$subsetSelector]])) {
+    return(
+      div(
+        style = "text-align: center; padding: 40px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px;",
+        h4("Final Cell Type Assignment", style = "color: #6c757d; margin-bottom: 15px;"),
+        p("Please run Calculate All Subset Markers first before annotating clusters", 
+          style = "color: #6c757d; font-size: 16px;")
+      )
+    )
+  }
+
     clusters <- sort(as.numeric(as.character(levels(Idents(current_subset())))))
     
     tagList(
