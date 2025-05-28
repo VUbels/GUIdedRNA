@@ -5,7 +5,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3939:3939"
+      - "3838:3838"
     volumes:
       # Default data and output directories
       - ./data:/data:rw
