@@ -64,7 +64,7 @@ docker rm guidedrna-app &>/dev/null
 
 # Find available port
 PORT=3838
-while netstat -tuln 2>/dev/null | grep -q ":$PORT "; do
+while netstat -tuln 2>/dev/null | grep -q ":$PORT " || ss -tuln 2>/dev/null | grep -q ":$PORT "; do
     PORT=$((PORT + 1))
     if [ $PORT -gt 3850 ]; then
         echo "❌ No available ports found"
@@ -87,38 +87,58 @@ VOLUME_MOUNTS+="-v $HOME:/host_home "
 case "$OS_TYPE" in
     "Linux")
         echo "🐧 Detected Linux - mounting system drives..."
-        VOLUME_MOUNTS+="-v /:/host_system:ro "
-        VOLUME_MOUNTS+="-v /media:/host_media:ro "
-        VOLUME_MOUNTS+="-v /mnt:/host_mnt:ro "
+        # Only mount directories that exist and are accessible
+        if [ -d "/" ] && [ -r "/" ]; then
+            VOLUME_MOUNTS+="-v /:/host_system:ro "
+        fi
+        if [ -d "/media" ] && [ -r "/media" ]; then
+            VOLUME_MOUNTS+="-v /media:/host_media:ro "
+        fi
+        if [ -d "/mnt" ] && [ -r "/mnt" ]; then
+            VOLUME_MOUNTS+="-v /mnt:/host_mnt:ro "
+        fi
         
         # Check for WSL and Windows drives
         if grep -qi microsoft /proc/version 2>/dev/null; then
             echo "🪟 WSL detected - mounting Windows drives..."
             for drive in c d e f g h i j; do
-                if [ -d "/mnt/$drive" ]; then
-                    VOLUME_MOUNTS+="-v /mnt/$drive:/host_drives/${drive^^}:ro "
+                if [ -d "/mnt/$drive" ] && [ -r "/mnt/$drive" ]; then
+                    VOLUME_MOUNTS+="-v /mnt/$drive:/host_drives/${drive^^} "
+                    echo "  ✓ Mounted drive ${drive^^}:"
                 fi
             done
         fi
         ;;
     "Darwin")
         echo "🍎 Detected macOS - mounting system drives..."
-        VOLUME_MOUNTS+="-v /:/host_system:ro "
-        VOLUME_MOUNTS+="-v /Volumes:/host_volumes:ro "
+        if [ -d "/" ] && [ -r "/" ]; then
+            VOLUME_MOUNTS+="-v /:/host_system:ro "
+        fi
+        if [ -d "/Volumes" ] && [ -r "/Volumes" ]; then
+            VOLUME_MOUNTS+="-v /Volumes:/host_volumes:ro "
+        fi
         ;;
     *)
         echo "❓ Unknown OS - using basic mounts..."
-        VOLUME_MOUNTS+="-v /:/host_system:ro "
+        if [ -d "/" ] && [ -r "/" ]; then
+            VOLUME_MOUNTS+="-v /:/host_system:ro "
+        fi
         ;;
 esac
 
 # Start container with comprehensive volume mounts
 echo "Starting container with volume mounts..."
-docker run -d \
+if ! docker run -d \
     -p $PORT:3838 \
     $VOLUME_MOUNTS \
     --name guidedrna-app \
-    guidedrna:latest
+    guidedrna:latest; then
+    echo "❌ Failed to start container!"
+    echo "Check Docker logs: docker logs guidedrna-app"
+    echo "Press Enter to exit..."
+    read
+    exit 1
+fi
 
 echo
 echo "✅ GUIdedRNA is now running!"
@@ -130,7 +150,7 @@ case "$OS_TYPE" in
         echo "🏠 Your home folder: 'Host Home'"
         echo "💾 System drives: 'Host System', 'Host Media', 'Host Mnt'"
         if grep -qi microsoft /proc/version 2>/dev/null; then
-            echo "🪟 Windows drives: 'C:', 'D:', 'E:', etc."
+            echo "🪟 Windows drives: Available mounted drives"
         fi
         ;;
     "Darwin")
@@ -147,18 +167,37 @@ echo
 echo "Waiting for application to start..."
 sleep 10
 
+# Check if container is actually running
+if ! docker ps | grep -q guidedrna-app; then
+    echo "❌ Container failed to start properly!"
+    echo "Container logs:"
+    docker logs guidedrna-app
+    echo
+    echo "Press Enter to exit..."
+    read
+    exit 1
+fi
+
 # Try to open browser
 if command -v open &> /dev/null; then
     # macOS
+    echo "🌐 Opening browser..."
     open "http://localhost:$PORT"
 elif command -v xdg-open &> /dev/null; then
     # Linux
-    xdg-open "http://localhost:$PORT"
+    echo "🌐 Opening browser..."
+    xdg-open "http://localhost:$PORT" &>/dev/null &
 fi
 
 echo
 echo "If the browser doesn't open automatically, manually go to:"
 echo "http://localhost:$PORT"
+echo
+echo "💡 Troubleshooting tips:"
+echo "• If page doesn't load, wait 30 seconds and refresh"
+echo "• Check container status: docker ps"
+echo "• View logs: docker logs guidedrna-app"
+echo "• Stop container: docker stop guidedrna-app"
 echo
 echo "Press Enter to close..."
 read
