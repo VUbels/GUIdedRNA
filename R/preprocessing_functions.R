@@ -42,7 +42,7 @@ assign_ExpectedDoublet <- function(val) {
 #' Fully runs the doublet removal protocol through DoubletFinder() based on variable from assign_ExpectedDoublet().
 #' Returns Seurat object with TRUE/FALSE assignment to duplicate cells in META data.
 #' 
-#' @param seurat_list List of Seurat objects
+#' @param seurat_list List of Seurat objects.
 #' @export
 
 preprocess_DoubletRemoval <- function(seurat_list) {
