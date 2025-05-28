@@ -35,7 +35,6 @@ if %errorLevel% neq 0 (
     pause
     exit /b 1
 )
-
 echo ✓ Docker is ready!
 
 :: Build the application
@@ -46,7 +45,6 @@ if %errorLevel% neq 0 (
     pause
     exit /b 1
 )
-
 echo ✓ Build completed!
 
 :: Start the application
@@ -69,20 +67,29 @@ if %errorLevel% equ 0 (
 if not exist data mkdir data
 if not exist output mkdir output
 
-:: Start container with comprehensive volume mounts
-docker run -d ^
-    -p %PORT%:3838 ^
-    -v "%cd%\data:/data" ^
-    -v "%cd%\output:/output" ^
-    -v "C:\:/host_drives/C" ^
-    -v "D:\:/host_drives/D" ^
-    -v "E:\:/host_drives/E" ^
-    -v "F:\:/host_drives/F" ^
-    -v "G:\:/host_drives/G" ^
-    -v "H:\:/host_drives/H" ^
-    -v "%USERPROFILE%:/host_home" ^
-    --name guidedrna-app ^
-    guidedrna:latest
+:: Build the docker run command with only existing drives
+set DOCKER_CMD=docker run -d -p %PORT%:3838 -v "%cd%\data:/data" -v "%cd%\output:/output" -v "%USERPROFILE%:/host_home"
+
+:: Check for existing drives and add them to the command
+if exist "C:\" set DOCKER_CMD=%DOCKER_CMD% -v "C:\:/host_drives/C"
+if exist "D:\" set DOCKER_CMD=%DOCKER_CMD% -v "D:\:/host_drives/D"
+if exist "E:\" set DOCKER_CMD=%DOCKER_CMD% -v "E:\:/host_drives/E"
+if exist "F:\" set DOCKER_CMD=%DOCKER_CMD% -v "F:\:/host_drives/F"
+if exist "G:\" set DOCKER_CMD=%DOCKER_CMD% -v "G:\:/host_drives/G"
+if exist "H:\" set DOCKER_CMD=%DOCKER_CMD% -v "H:\:/host_drives/H"
+
+:: Complete the command
+set DOCKER_CMD=%DOCKER_CMD% --name guidedrna-app guidedrna:latest
+
+:: Execute the command
+%DOCKER_CMD%
+
+if %errorLevel% neq 0 (
+    echo ❌ Failed to start container!
+    echo Check Docker Desktop logs for more details.
+    pause
+    exit /b 1
+)
 
 echo.
 echo ✅ GUIdedRNA is now running!
@@ -90,20 +97,18 @@ echo 🌐 Open your browser to: http://localhost:%PORT%
 echo.
 echo 📁 Available drives should now be visible in the file browser
 echo 🏠 Your user folder is mounted as 'Host Home'
-echo 💾 Windows drives C:, D:, E:, F:, G:, H: are mounted as 'C:', 'D:', etc.
+echo 💾 Available Windows drives are mounted as drive letters
 echo.
 echo To stop GUIdedRNA: go into docker desktop and close guidedrna-app
 echo.
-
-:: Try to open browser
-start http://localhost:%PORT%
-
 echo Waiting 10 seconds for the application to fully start...
 timeout /t 10 /nobreak >nul
-
 echo.
 echo If the browser doesn't open automatically, manually go to:
 echo http://localhost:%PORT%
 echo.
+
+:: Optional: Open browser automatically
+start http://localhost:%PORT%
 
 pause
