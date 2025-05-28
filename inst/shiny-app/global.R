@@ -1,4 +1,4 @@
-library(GUIdedRNA)
+# Load required libraries
 library(shiny)
 library(shinydashboard)
 library(shinyFiles)
@@ -7,125 +7,92 @@ library(shinycssloaders)
 library(DT)
 library(ggplot2)
 library(Matrix)
-library(plyr)
 library(dplyr)
-library(irlba)
+library(cowplot)
+library(Seurat)
+library(harmony)
+library(edgeR)
+library(celda)
 
-# Load packages with error handling
+# Load problematic packages with error handling
 safe_library <- function(package) {
   tryCatch({
     library(package, character.only = TRUE)
     message(paste("✓ Loaded:", package))
+    return(TRUE)
   }, error = function(e) {
     warning(paste("✗ Failed to load:", package, "- Error:", e$message))
+    return(FALSE)
   })
 }
 
-# Essential packages that must load
-essential_packages <- c("edgeR", "Seurat", "SeuratObject", "cowplot", "fs", "R6", "harmony")
-for(pkg in essential_packages) {
-  safe_library(pkg)
+# Try to load the problematic packages
+GENOMIC_FEATURES_AVAILABLE <- safe_library("GenomicFeatures")
+TXDB_AVAILABLE <- safe_library("TxDb.Hsapiens.UCSC.hg38.knownGene")
+DOUBLETFINDER_AVAILABLE <- safe_library("DoubletFinder")
+
+# Load GUIdedRNA package
+library(GUIdedRNA)
+
+# Function to check if a required package is available
+check_package_availability <- function(package_name) {
+  switch(package_name,
+         "GenomicFeatures" = GENOMIC_FEATURES_AVAILABLE,
+         "TxDb.Hsapiens.UCSC.hg38.knownGene" = TXDB_AVAILABLE,
+         "DoubletFinder" = DOUBLETFINDER_AVAILABLE,
+         TRUE  # Default to TRUE for other packages
+  )
 }
 
-# Optional packages that can fail gracefully
-optional_packages <- c("celda", "decontX", "GenomicFeatures", "GenomicRanges", 
-                      "AnnotationDbi", "sparseMatrixStats", "matrixStats",
-                      "TxDb.Hsapiens.UCSC.hg38.knownGene", "org.Hs.eg.db")
-for(pkg in optional_packages) {
-  safe_library(pkg)
-}
+# Setup volumes for file browser
+volumes <- c()
 
-# Docker-compatible volume setup
-setup_docker_volumes <- function() {
-  volumes <- c()
-  
-  # Check if we're running in Docker (look for mounted volumes)
-  if (dir.exists("/data")) {
-    volumes <- c(volumes, "Data Volume" = "/data")
-  }
-  
-  if (dir.exists("/output")) {
-    volumes <- c(volumes, "Output Volume" = "/output")
-  }
-  
-  # Always include root and common directories
+# Add home directory
+volumes <- c(volumes, Home = fs::path_home())
+
+# Add root for Linux/Mac
+if (.Platform$OS.type == "unix") {
   volumes <- c(volumes, "Root" = "/")
   
-  # Check for host system mounts (from docker volume mapping)
-  if (dir.exists("/host_root")) {
-    volumes <- c(volumes, "Host Root" = "/host_root")
-  }
-  
-  if (dir.exists("/host_home")) {
-    volumes <- c(volumes, "Host Home" = "/host_home")
-  }
-  
-  if (dir.exists("/host_mnt")) {
-    volumes <- c(volumes, "Host Mounted Drives" = "/host_mnt")
+  # Add common WSL paths if running in WSL
+  wsl_check <- system("grep -q Microsoft /proc/version", ignore.stdout = TRUE, ignore.stderr = TRUE)
+  if (wsl_check == 0) {  # Running in WSL
+    # Add Windows drives that might be mounted
+    if (dir.exists("/mnt/c")) volumes <- c(volumes, "C:" = "/mnt/c")
+    if (dir.exists("/mnt/d")) volumes <- c(volumes, "D:" = "/mnt/d")
+    if (dir.exists("/mnt/e")) volumes <- c(volumes, "E:" = "/mnt/e")
+    if (dir.exists("/mnt/f")) volumes <- c(volumes, "F:" = "/mnt/f")
+    if (dir.exists("/mnt/g")) volumes <- c(volumes, "G:" = "/mnt/g")
     
-    # Add individual drives if they exist in host_mnt
-    for (letter in c("c", "d", "e", "f", "g", "h")) {
-      drive_path <- paste0("/host_mnt/", letter)
-      if (dir.exists(drive_path)) {
-        drive_name <- paste0("Windows ", toupper(letter), ":")
-        volumes <- c(volumes, drive_name)
-        names(volumes)[length(volumes)] <- drive_name
-        volumes[length(volumes)] <- drive_path
-      }
+    if (dir.exists("/mnt")) volumes <- c(volumes, "Windows Drives" = "/mnt")
+  }
+  
+  # Add other common Unix locations
+  if (dir.exists("/media")) volumes <- c(volumes, "Media" = "/media")
+  if (dir.exists("/home")) volumes <- c(volumes, "Home" = "/home")
+}
+
+# Add Windows drives if on Windows
+if (.Platform$OS.type == "windows") {
+  for (letter in LETTERS) {
+    drive <- paste0(letter, ":")
+    if (dir.exists(drive)) {
+      volumes <- c(volumes, drive)
+      names(volumes)[length(volumes)] <- paste0(letter, ":")
     }
   }
-  
-  # Check for direct mounted Windows drives
-  if (dir.exists("/mnt")) {
-    volumes <- c(volumes, "Direct Mounted Drives" = "/mnt")
-    
-    # Add individual drives if they exist
-    for (letter in c("c", "d", "e", "f", "g", "h")) {
-      drive_path <- paste0("/mnt/", letter)
-      if (dir.exists(drive_path)) {
-        drive_name <- paste0("Drive ", toupper(letter), ":")
-        volumes <- c(volumes, drive_name)
-        names(volumes)[length(volumes)] <- drive_name
-        volumes[length(volumes)] <- drive_path
-      }
-    }
-  }
-  
-  # Add home directory if it exists
-  if (dir.exists("/home")) {
-    volumes <- c(volumes, "Home" = "/home")
-  }
-  
-  # Add tmp directory
-  if (dir.exists("/tmp")) {
-    volumes <- c(volumes, "Temp" = "/tmp")
-  }
-  
-  # Check for media directories
-  if (dir.exists("/media")) {
-    volumes <- c(volumes, "Media" = "/media")
-  }
-  
-  return(volumes)
 }
 
-# Set up volumes globally
-.docker_volumes <- setup_docker_volumes()
-
-# Global message queue - using a hidden environment variable for storage
-.message_env <- new.env()
-.message_env$queue <- character(0)
-
-# This function will be replaced when the app initializes
-send_message <- function(msg, tab_id = NULL) {
-  message(paste("Message queued:", msg))
+# Docker volume support
+if (dir.exists("/data")) {
+  volumes <- c(volumes, "Data" = "/data")
+}
+if (dir.exists("/output")) {
+  volumes <- c(volumes, "Output" = "/output")
 }
 
-get_messages <- function() {
-  msgs <- .message_env$queue
-  .message_env$queue <- character(0)
-  return(msgs)
-}
-
-message("GUIdedRNA global.R loaded successfully")
-message(paste("Available volumes:", paste(names(.docker_volumes), collapse = ", ")))
+message("Global.R loaded successfully")
+message(paste("Available volumes:", paste(names(volumes), collapse = ", ")))
+message(paste("GenomicFeatures available:", GENOMIC_FEATURES_AVAILABLE))
+message(paste("TxDb.Hsapiens.UCSC.hg38.knownGene available:", TXDB_AVAILABLE))
+message(paste("DoubletFinder available:", DOUBLETFINDER_AVAILABLE))

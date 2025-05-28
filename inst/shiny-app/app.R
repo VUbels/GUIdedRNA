@@ -1007,6 +1007,7 @@ server <- function(input, output, session) {
   
 
   # Data loading for folder containing multiple datasets
+  # Enhanced data loading for folder containing multiple datasets with flexible naming
   observeEvent(input$loadData_folder, {
     # Check if folder is selected
     if (is.null(input$folderBtn_single)) {
@@ -1026,140 +1027,220 @@ server <- function(input, output, session) {
       # Initialize a list to store Seurat objects
       seurat_list <- list()
       
-      # 1. Process files in the main directory with pattern: name_matrix.mtx.gz, etc.
-      main_files <- list.files(folder_path, pattern = "(_matrix.mtx.gz|_features.tsv.gz|_barcodes.tsv.gz)$", 
-                               full.names = TRUE, recursive = FALSE)
-      
-      # Find base names for files in the main directory
-      main_base_names <- unique(sapply(strsplit(basename(main_files), 
-                                                "_matrix.mtx.gz|_features.tsv.gz|_barcodes.tsv.gz"), 
-                                       `[`, 1))
-      
-      # Calculate the increment amount for each dataset
-      total_datasets <- length(main_base_names)
-      incr_amount <- 1 / total_datasets
-      
-      # Process datasets in the main directory
-      for (i in seq_along(main_base_names)) {
-        base <- main_base_names[i]
+      # Helper function to identify file triplets in a directory
+      find_file_triplets <- function(dir_path, base_name = NULL) {
+        all_files <- list.files(dir_path, full.names = TRUE)
+        file_basenames <- basename(all_files)
         
-        # Update progress bar with dataset name and percentage
-        incProgress(incr_amount, detail = paste0("Processing ", base, " (", i, "/", total_datasets, ")"))
+        triplets <- list()
         
-        mtx_file <- file.path(folder_path, paste0(base, "_matrix.mtx.gz"))
-        features_file <- file.path(folder_path, paste0(base, "_features.tsv.gz"))
-        cells_file <- file.path(folder_path, paste0(base, "_barcodes.tsv.gz"))
-        
-        # Check if all files exist
-        if (file.exists(mtx_file) && file.exists(features_file) && file.exists(cells_file)) {
-          # Read the matrix
-          tryCatch({
-            # Read the matrix
-            counts <- Seurat::ReadMtx(
-              mtx = mtx_file,
-              features = features_file,
-              cells = cells_file
+        if (!is.null(base_name)) {
+          # Look for files with specific base name (e.g., GSM6532920_AA4)
+          matrix_pattern <- paste0("^", base_name, ".*matrix.*\\.(mtx|mtx\\.gz)$")
+          features_pattern <- paste0("^", base_name, ".*(features|genes).*\\.(tsv|tsv\\.gz|txt|txt\\.gz)$")
+          barcodes_pattern <- paste0("^", base_name, ".*(barcodes|cells).*\\.(tsv|tsv\\.gz|txt|txt\\.gz)$")
+          
+          mtx_file <- all_files[grepl(matrix_pattern, file_basenames, ignore.case = TRUE)]
+          features_file <- all_files[grepl(features_pattern, file_basenames, ignore.case = TRUE)]
+          barcodes_file <- all_files[grepl(barcodes_pattern, file_basenames, ignore.case = TRUE)]
+          
+          if (length(mtx_file) > 0 && length(features_file) > 0 && length(barcodes_file) > 0) {
+            triplets[[base_name]] <- list(
+              matrix = mtx_file[1],
+              features = features_file[1],
+              barcodes = barcodes_file[1]
             )
-            
-            # Create Seurat object
-            seurat_obj <- Seurat::CreateSeuratObject(counts = counts, project = base)
-            
-            # Calculate percent mitochondrial either in human or other data (murine/rat)
-            seurat_obj[["percent.mt"]] <- if(any(grepl("^MT-", rownames(seurat_obj)))) {
-              Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
-            } else if(any(grepl("^mt-", rownames(seurat_obj)))) {
-              Seurat::PercentageFeatureSet(seurat_obj, pattern = "^mt-")
+          }
+        } else {
+          # Look for common file patterns without specific base names
+          
+          # Pattern 1: Standard 10X files (matrix.mtx, features.tsv, barcodes.tsv)
+          matrix_files <- all_files[grepl("^(filtered_)?(matrix|cells_x_genes)\\.(mtx|mtx\\.gz)$", file_basenames, ignore.case = TRUE)]
+          features_files <- all_files[grepl("^(filtered_)?(features|genes)\\.(tsv|tsv\\.gz|txt|txt\\.gz)$", file_basenames, ignore.case = TRUE)]
+          barcodes_files <- all_files[grepl("^(filtered_)?(barcodes|cells)\\.(tsv|tsv\\.gz|txt|txt\\.gz)$", file_basenames, ignore.case = TRUE)]
+          
+          if (length(matrix_files) > 0 && length(features_files) > 0 && length(barcodes_files) > 0) {
+            dataset_name <- basename(dir_path)
+            triplets[[dataset_name]] <- list(
+              matrix = matrix_files[1],
+              features = features_files[1],
+              barcodes = barcodes_files[1]
+            )
+          }
+          
+          # Pattern 2: Files with common prefixes (e.g., GSM123_sample)
+          # Extract potential prefixes from filenames
+          potential_prefixes <- unique(sapply(file_basenames, function(x) {
+            # Split by underscore and take first part if it looks like a GSM or similar identifier
+            parts <- unlist(strsplit(x, "_"))
+            if (length(parts) > 1 && (grepl("^GSM|^SRR|^[A-Z]+[0-9]", parts[1]) || nchar(parts[1]) > 3)) {
+              paste(parts[1:min(2, length(parts))], collapse = "_")
             } else {
-              # If neither pattern exists, create a zero vector as fallback
-              rep(0, ncol(seurat_obj))
+              NULL
             }
+          }))
+          
+          potential_prefixes <- potential_prefixes[!is.null(potential_prefixes)]
+          
+          for (prefix in potential_prefixes) {
+            matrix_pattern <- paste0("^", gsub("([.|()\\^{}+$*?]|\\[|\\])", "\\\\\\1", prefix), ".*matrix.*\\.(mtx|mtx\\.gz)$")
+            features_pattern <- paste0("^", gsub("([.|()\\^{}+$*?]|\\[|\\])", "\\\\\\1", prefix), ".*(features|genes).*\\.(tsv|tsv\\.gz|txt|txt\\.gz)$")
+            barcodes_pattern <- paste0("^", gsub("([.|()\\^{}+$*?]|\\[|\\])", "\\\\\\1", prefix), ".*(barcodes|cells).*\\.(tsv|tsv\\.gz|txt|txt\\.gz)$")
             
-            # Add to list
-            seurat_list[[base]] <- seurat_obj
-          }, error = function(e) {
-            showNotification(paste("Error processing", base, ":", e$message), type = "warning")
-          })
+            mtx_matches <- all_files[grepl(matrix_pattern, file_basenames, ignore.case = TRUE)]
+            features_matches <- all_files[grepl(features_pattern, file_basenames, ignore.case = TRUE)]
+            barcodes_matches <- all_files[grepl(barcodes_pattern, file_basenames, ignore.case = TRUE)]
+            
+            if (length(mtx_matches) > 0 && length(features_matches) > 0 && length(barcodes_matches) > 0) {
+              # Use folder name as dataset name for consistency
+              dataset_name <- basename(dir_path)
+              if (dataset_name == basename(folder_path)) {
+                # If we're in the main folder, use the prefix as dataset name
+                dataset_name <- prefix
+              }
+              triplets[[dataset_name]] <- list(
+                matrix = mtx_matches[1],
+                features = features_matches[1],
+                barcodes = barcodes_matches[1]
+              )
+            }
+          }
         }
+        
+        return(triplets)
       }
       
-      # 2. Process subdirectories with standard 10X naming
-      subdirs <- list.dirs(folder_path, recursive = FALSE, full.names = TRUE)
-      
-      for (subdir in subdirs) {
-        subdir_name <- basename(subdir)
-        setProgress(detail = paste("Uploading folder", subdir_name))
-        
-        # Construct the file paths for matrix, features, and barcodes
-        # Check for both .gz and non-gz versions
-        all_files <- list.files(subdir, full.names = TRUE)
-  
-        # Find matrix file (looks for files containing "matrix" and ending with .mtx or .mtx.gz)
-          mtx_file <- NULL
-            mtx_candidates <- all_files[grepl("matrix.*\\.(mtx|mtx\\.gz)$", basename(all_files), ignore.case = TRUE)]
-        if (length(mtx_candidates) > 0) {
-            mtx_file <- mtx_candidates[1]  # Take the first match
-        }
-        
-        # Find features file (looks for files containing "features" or "genes" and ending with common extensions)
-          features_file <- NULL
-            features_candidates <- all_files[grepl("(features|genes).*\\.(tsv|tsv\\.gz|txt|txt\\.gz)$", basename(all_files), ignore.case = TRUE)]
-        if (length(features_candidates) > 0) {
-            features_file <- features_candidates[1]  # Take the first match
-        }
-        
-        # Find barcodes file (looks for files containing "barcodes" or "cells" and ending with common extensions)
-          cells_file <- NULL
-            cells_candidates <- all_files[grepl("(barcodes|cells).*\\.(tsv|tsv\\.gz|txt|txt\\.gz)$", basename(all_files), ignore.case = TRUE)]
-        if (length(cells_candidates) > 0) {
-            cells_file <- cells_candidates[1]  # Take the first match
-        }
-        
-        # Check if all files exist in the subdirectory
-        if (!is.null(mtx_file) && !is.null(features_file) && !is.null(cells_file)) {
-          tryCatch({
-            # Read the matrix
-            counts <- Seurat::ReadMtx(
-              mtx = mtx_file,
-              features = features_file,
-              cells = cells_file
-            )
-            
-            # Create Seurat object
-            seurat_obj <- Seurat::CreateSeuratObject(counts = counts, project = subdir_name)
-            
-            # Calculate percent mitochondrial
-            seurat_obj[["percent.mt"]] <- Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
-            
-            # Add to list
-            seurat_list[[subdir_name]] <- seurat_obj
-          }, error = function(e) {
-            showNotification(paste("Error processing folder", subdir_name, ":", e$message), type = "warning")
-          })
-        }
-      }
-      
-      # Check if any datasets were found
-      if (length(seurat_list) == 0) {
-        # Try one last approach - using Read10X directly on the folder
+      # Helper function to create Seurat object from file triplet
+      create_seurat_from_triplet <- function(triplet, project_name) {
         tryCatch({
-          counts <- Seurat::Read10X(data.dir = folder_path)
+          # Check if we're dealing with txt files (single column format)
+          features_is_txt <- grepl("\\.txt$", triplet$features, ignore.case = TRUE)
+          barcodes_is_txt <- grepl("\\.txt$", triplet$barcodes, ignore.case = TRUE)
+          
+          # Read the matrix with appropriate parameters
+          if (features_is_txt || barcodes_is_txt) {
+            # For txt files, use single column format
+            counts <- Seurat::ReadMtx(
+              mtx = triplet$matrix,
+              features = triplet$features,
+              cells = triplet$barcodes,
+              feature.column = 1,  # Only one column in txt files
+              cell.column = 1      # Only one column in txt files
+            )
+          } else {
+            # For tsv/tsv.gz files, use default multi-column format
+            counts <- Seurat::ReadMtx(
+              mtx = triplet$matrix,
+              features = triplet$features,
+              cells = triplet$barcodes
+            )
+          }
           
           # Create Seurat object
-          seurat_obj <- Seurat::CreateSeuratObject(counts = counts, project = basename(folder_path))
+          seurat_obj <- Seurat::CreateSeuratObject(counts = counts, project = project_name)
           
-          # Calculate percent mitochondrial
-          seurat_obj[["percent.mt"]] <- Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+          # Calculate percent mitochondrial for different species
+          seurat_obj[["percent.mt"]] <- if(any(grepl("^MT-", rownames(seurat_obj)))) {
+            # Human mitochondrial genes
+            Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+          } else if(any(grepl("^mt-", rownames(seurat_obj)))) {
+            # Mouse/rat mitochondrial genes
+            Seurat::PercentageFeatureSet(seurat_obj, pattern = "^mt-")
+          } else {
+            # If neither pattern exists, create a zero vector as fallback
+            rep(0, ncol(seurat_obj))
+          }
           
-          # Add to list
-          seurat_list[[basename(folder_path)]] <- seurat_obj
+          return(seurat_obj)
         }, error = function(e) {
-          # Finally, if nothing works, show error
-          showNotification("No valid datasets found in the uploaded folder", type = "error")
+          showNotification(paste("Error processing", project_name, ":", e$message), type = "warning")
           return(NULL)
         })
       }
       
-      # Store the list in reactive values - instead of combining objects
+      # 1. First, check main directory for files with common prefixes
+      main_triplets <- find_file_triplets(folder_path)
+      
+      # 2. Process subdirectories
+      subdirs <- list.dirs(folder_path, recursive = FALSE, full.names = TRUE)
+      
+      # Collect all triplets
+      all_triplets <- main_triplets
+      
+      for (subdir in subdirs) {
+        subdir_triplets <- find_file_triplets(subdir)
+        all_triplets <- c(all_triplets, subdir_triplets)
+      }
+      
+      # 3. If no triplets found using pattern matching, try Read10X approach
+      if (length(all_triplets) == 0) {
+        # Try Read10X on main folder
+        tryCatch({
+          counts <- Seurat::Read10X(data.dir = folder_path)
+          seurat_obj <- Seurat::CreateSeuratObject(counts = counts, project = basename(folder_path))
+          seurat_obj[["percent.mt"]] <- if(any(grepl("^MT-", rownames(seurat_obj)))) {
+            Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+          } else if(any(grepl("^mt-", rownames(seurat_obj)))) {
+            Seurat::PercentageFeatureSet(seurat_obj, pattern = "^mt-")
+          } else {
+            rep(0, ncol(seurat_obj))
+          }
+          all_triplets[[basename(folder_path)]] <- "read10x_success"
+          seurat_list[[basename(folder_path)]] <- seurat_obj
+        }, error = function(e) {
+          # Try Read10X on each subdirectory
+          for (subdir in subdirs) {
+            tryCatch({
+              counts <- Seurat::Read10X(data.dir = subdir)
+              seurat_obj <- Seurat::CreateSeuratObject(counts = counts, project = basename(subdir))
+              seurat_obj[["percent.mt"]] <- if(any(grepl("^MT-", rownames(seurat_obj)))) {
+                Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+              } else if(any(grepl("^mt-", rownames(seurat_obj)))) {
+                Seurat::PercentageFeatureSet(seurat_obj, pattern = "^mt-")
+              } else {
+                rep(0, ncol(seurat_obj))
+              }
+              seurat_list[[basename(subdir)]] <- seurat_obj
+            }, error = function(e2) {
+              # Continue to next subdirectory
+            })
+          }
+        })
+      }
+      
+      # 4. Process triplets found by pattern matching
+      total_datasets <- length(all_triplets)
+      if (total_datasets > 0) {
+        incr_amount <- 1 / total_datasets
+        
+        for (i in seq_along(all_triplets)) {
+          dataset_name <- names(all_triplets)[i]
+          triplet <- all_triplets[[i]]
+          
+          # Skip if already processed by Read10X
+          if (identical(triplet, "read10x_success")) {
+            next
+          }
+          
+          # Update progress bar
+          incProgress(incr_amount, detail = paste0("Processing ", dataset_name, " (", i, "/", total_datasets, ")"))
+          
+          # Create Seurat object
+          seurat_obj <- create_seurat_from_triplet(triplet, dataset_name)
+          
+          if (!is.null(seurat_obj)) {
+            seurat_list[[dataset_name]] <- seurat_obj
+          }
+        }
+      }
+      
+      # Check if any datasets were loaded
+      if (length(seurat_list) == 0) {
+        showNotification("No valid datasets found in the uploaded folder", type = "error")
+        return(NULL)
+      }
+      
+      # Store the list in reactive values
       values$seurat_list <- seurat_list
       
       # Show success notification
