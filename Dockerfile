@@ -1,4 +1,5 @@
-FROM rocker/shiny:4.3.0
+# Use Bioconductor base image with proper R/Bioconductor version alignment
+FROM bioconductor/bioconductor_docker:RELEASE_3_18
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -18,68 +19,50 @@ RUN apt-get update && apt-get install -y \
     libfftw3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Set R library path
-ENV R_LIBS_USER=/usr/local/lib/R/site-library
+# Install core Shiny packages using BiocManager for version consistency
+RUN R -e "BiocManager::install(c('shiny', 'shinydashboard', 'shinyFiles', 'shinyjs', 'shinycssloaders', 'DT'), ask=FALSE)"
 
-# Install R package building tools first
-RUN R -e "install.packages(c('remotes', 'devtools', 'BiocManager'), repos='https://cran.rstudio.com/')"
+# Install required Bioconductor packages (all at once for version consistency)
+RUN R -e "BiocManager::install(c('sparseMatrixStats', 'AnnotationDbi', 'edgeR', 'GenomicRanges', 'GenomicFeatures', 'org.Hs.eg.db', 'TxDb.Hsapiens.UCSC.hg38.knownGene', 'celda', 'decontX'), ask=FALSE)"
 
-# Install system-level R packages first
-RUN R -e "install.packages(c('Matrix', 'irlba', 'Rcpp', 'RcppArmadillo', 'fields', 'KernSmooth', 'ROCR', 'parallel', 'plyr', 'matrixStats'), repos='https://cran.rstudio.com/')"
+# Install CRAN packages through BiocManager for version consistency
+RUN R -e "BiocManager::install(c('Matrix', 'irlba', 'Rcpp', 'RcppArmadillo', 'fields', 'KernSmooth', 'ROCR', 'parallel', 'plyr', 'matrixStats', 'dplyr', 'ggplot2', 'cowplot', 'fs', 'R6', 'remotes', 'devtools'), ask=FALSE)"
 
-# Install core Shiny packages
-RUN R -e "install.packages(c('shiny', 'shinydashboard', 'shinyFiles', 'shinyjs', 'shinycssloaders', 'DT'), repos='https://cran.rstudio.com/')"
+# Install Seurat ecosystem through BiocManager
+RUN R -e "BiocManager::install(c('SeuratObject', 'Seurat', 'harmony'), ask=FALSE)"
 
-# Install Bioconductor packages
-RUN R -e "BiocManager::install(c('sparseMatrixStats', 'AnnotationDbi', 'edgeR', 'GenomicRanges', 'GenomicFeatures', 'org.Hs.eg.db', 'TxDb.Hsapiens.UCSC.hg38.knownGene', 'celda', 'decontX'))"
+# Install DoubletFinder with error handling (optional dependency)
+RUN R -e "tryCatch({ remotes::install_github('chris-mcginnis-ucsf/DoubletFinder', upgrade='never'); cat('DoubletFinder installed successfully\\n') }, error=function(e) { cat('DoubletFinder failed, will be installed by GUIdedRNA if needed\\n') })"
 
-# Install data manipulation packages
-RUN R -e "install.packages(c('dplyr', 'ggplot2', 'cowplot', 'fs', 'R6'), repos='https://cran.rstudio.com/')"
-
-# Install Seurat ecosystem (critical to do this after Bioconductor)
-RUN R -e "install.packages(c('Seurat'), repos='https://cran.rstudio.com/')"
-RUN R -e "install.packages(c('SeuratObject'), repos='https://cran.rstudio.com/')"
-
-# Install harmony
-RUN R -e "install.packages('harmony', repos='https://cran.rstudio.com/')"
-
-# Install GitHub packages
-RUN R -e "remotes::install_github('chris-mcginnis-ucsf/DoubletFinder')"
-RUN R -e "remotes::install_github('VUbels/GUIdedRNA')"
+# Install GUIdedRNA - let it handle its own dependencies
+RUN R -e "remotes::install_github('VUbels/GUIdedRNA', dependencies=TRUE, upgrade='never')"
 
 # Verify installation
-RUN R -e "library(GUIdedRNA); cat('GUIdedRNA installed successfully from GitHub\n')"
+RUN R -e "library(GUIdedRNA); cat('GUIdedRNA loaded successfully\\n')"
 
 # Create data and output directories
-RUN mkdir -p /data /output /app
-
-# Set working directory
+RUN mkdir -p /data /output
 WORKDIR /app
 
-# Create startup script as R file
-RUN echo 'library(shiny)\n\
-library(GUIdedRNA)\n\
+# Create simple launch script
+RUN echo 'library(GUIdedRNA)\n\
 \n\
-cat("Loading GUIdedRNA package...\\n")\n\
-\n\
-# Check if launch function exists\n\
+# Launch GUIdedRNA application\n\
 if(exists("launch_GUIdedRNA")) {\n\
-    cat("Using launch_GUIdedRNA function\\n")\n\
-    launch_GUIdedRNA(host = "0.0.0.0", port = 3838, launch.browser = FALSE)\n\
+  cat("Using launch_GUIdedRNA function\\n")\n\
+  launch_GUIdedRNA(host="0.0.0.0", port=3838, launch.browser=FALSE)\n\
 } else {\n\
-    cat("Looking for app directory...\\n")\n\
-    app_dir <- system.file("shiny-app", package = "GUIdedRNA")\n\
-    cat("App directory:", app_dir, "\\n")\n\
-    if(app_dir != "" && dir.exists(app_dir)) {\n\
-        cat("Starting Shiny app from directory\\n")\n\
-        shiny::runApp(appDir = app_dir, host = "0.0.0.0", port = 3838, launch.browser = FALSE)\n\
-    } else {\n\
-        stop("GUIdedRNA app directory not found")\n\
-    }\n\
-}' > /app/start.R
+  cat("Using fallback launch method\\n")\n\
+  app_dir <- system.file("shiny-app", package="GUIdedRNA")\n\
+  if(app_dir != "" && dir.exists(app_dir)) {\n\
+    shiny::runApp(appDir=app_dir, host="0.0.0.0", port=3838, launch.browser=FALSE)\n\
+  } else {\n\
+    stop("GUIdedRNA app directory not found")\n\
+  }\n\
+}' > /app/launch.R
 
 # Expose port
 EXPOSE 3838
 
-# Run the application
-CMD ["R", "--no-restore", "--file=/app/start.R"]
+# Simple launch command
+CMD ["R", "--no-restore", "--file=/app/launch.R"]
