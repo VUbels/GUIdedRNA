@@ -39,7 +39,7 @@ After docker container is build once, subsequently running app is instantaneous 
 > [!NOTE]
 > **On IOS/Linux if you can't double click INSTALL_AND_RUN.sh you might need to run the following in command line to make the file executable.**  
 > ```
-> **Open terminal**
+> **Open Terminal/Command Line**
 > cd Desktop/GUIdedRNA
 > chmod +x INSTALL_AND_RUN_IOSLIN.sh  
 > ./INSTALL_AND_RUN_IOSLIN.sh  
