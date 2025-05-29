@@ -1,6 +1,6 @@
 Package: GUIdedRNA
 Title: scRNA analysis in a simple interface
-Version: 0.0.0.9000
+Version: 0.1.0.0
 Authors@R: 
     person("Victor", "Ubels", email = "U.Victor@hotmail.nl", role = c("aut", "cre"))
 Description: A comprehensive Shiny application for guided RNA-seq analysis 
