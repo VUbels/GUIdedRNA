@@ -40,7 +40,7 @@ After docker container is build once, subsequently running app is instantaneous 
 > ./INSTALL_AND_RUN_IOSLIN.sh  
 > ```
 
-> [!INFO] 
+> [!NOTE] 
 > **When using app, your directories to upload data and set the output directory are likely found in root >> host_drives.**
 
 ## For Advanced Users & Developers
