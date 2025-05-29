@@ -78,19 +78,6 @@ docker build -t guidedrna .
 docker run -p 3838:3838 -v ./data:/data -v ./output:/output guidedrna
 ```
 
-## Workflow
-
-1. **Setup**: Upload 10X Genomics data or folder containing multiple datasets
-2. **Sample Information**: Add metadata and sample attributes
-3. **Quality Control**: Set filtering parameters and visualize QC metrics
-4. **Preprocessing**: Run doublet removal and ambient RNA correction
-5. **LSI Round 1**: Initial dimensionality reduction and broad clustering
-6. **Initial Clustering**: Assign broad cell types using marker genes
-7. **LSI Round 2**: Refined analysis on cell type subsets
-8. **Final Clustering**: Detailed cell type annotation
-9. **Integration**: Combine all results into final annotations
-10. **Download**: Export processed data and results
-
 ## Requirements
 
 - R >= 4.0.0
