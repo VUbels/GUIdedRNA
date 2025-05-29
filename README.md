@@ -21,8 +21,9 @@ No technical knowledge required - just double-click and wait!
 2) Extract to your Desktop  
 3) Download and install https://www.docker.com/products/docker-desktop/  
 4) Run Docker Desktop  
-5a) Double-click INSTALL_AND_RUN.bat (WINDOWS)
-5b) Double-click INSTALL_AND_RUN.sh (IOS/Linux)
+5) Run the appropriate script:
+   - **Windows:** Double-click INSTALL_AND_RUN.bat
+   - **IOS/Linux:** Double-click INSTALL_AND_RUN.sh
 6) Let Docker build container (5-15 minutes)
 7) If browser does not open simply go to http://localhost:3838
 
