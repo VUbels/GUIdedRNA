@@ -39,6 +39,8 @@ After docker container is build once, subsequently running app is instantaneous 
 > chmod +x INSTALL_AND_RUN_IOSLIN.sh  
 > ./INSTALL_AND_RUN_IOSLIN.sh  
 > ```
+
+> [!INFO] 
 > **When using app, your directories to upload data and set the output directory are likely found in root >> host_drives.**
 
 ## For Advanced Users & Developers
