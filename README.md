@@ -31,15 +31,15 @@ No technical knowledge required - just double-click and wait!
 6) Let Docker build container (5-15 minutes)
 7) If browser does not open simply go to http://localhost:3838
 
-After docker container is build once, subsequently running app is instantaneous and can be done through docker desktop. Refresh browser if connection cannot be found.
+After docker container is build once, subsequently running app is instantaneous and can be done through docker desktop or by double-clicking INSTALL_AND_RUN again. Refresh browser if connection cannot be found.
 
 > [!TIP]
-> **When using app, your directories to upload data are likely found in root >> host_drives!**
+> **When using app, your directories to upload data and set the output directory are likely found in root >> host_drives.**
 
 ## For Advanced Users & Developers
 WSL2 Users (Windows Subsystem for Linux)  
 If you need Windows drive access and advanced volume mounting:  
-Run through command line with ADVANCED_DEPLOY.sh
+Run through command line with ADVANCED_DEPLOY.sh  
 If working through command line simply open in any browser at http://localhost:3838  
 
 ## Installation of GUIdedRNA library and use through IDE
