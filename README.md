@@ -34,11 +34,14 @@ No technical knowledge required - just double-click and wait!
 After docker container is build once, subsequently running app is instantaneous and can be done through docker desktop or by double-clicking INSTALL_AND_RUN again. Refresh browser if connection cannot be found.
 
 > [!TIP]
+> **On IOS/Linux if you can't double dlick INSTALL_AND_RUN.sh you might need to run chmod +x INSTALL_AND_RUN_IOSLIN.sh and then ./INSTALL_AND_RUN_IOSLIN.sh in command line.**  
+>
 > **When using app, your directories to upload data and set the output directory are likely found in root >> host_drives.**
 
 ## For Advanced Users & Developers
 WSL2 Users (Windows Subsystem for Linux)  
 If you need Windows drive access and advanced volume mounting:  
+
 Run through command line with ADVANCED_DEPLOY.sh  
 If working through command line simply open in any browser at http://localhost:3838  
 
