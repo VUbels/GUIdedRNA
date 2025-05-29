@@ -294,9 +294,10 @@ ui <- dashboardPage(
                   height = "650px",
                   solidHeader = TRUE,
                   checkboxGroupInput("preprocessMethods", "Select Preprocessing Methods", 
-                                     choices = c("Doublet Removal" = "doublet", 
-                                                 "Ambient RNA Removal" = "ambient"),
-                                     selected = c("doublet", "ambient")
+                   choices = c("Doublet Removal" = "doublet",
+                               "Unknown Gene Removal (ENSG)" = "remove_ensembl",
+                               "Ambient RNA Removal" = "ambient"),
+                   selected = c("doublet", "ambient")
                                      
                   ),
                   actionButton("commitPreprocessing", "Run Selected Methods", 
@@ -327,7 +328,8 @@ ui <- dashboardPage(
                     checkboxGroupInput("blacklist_genes_1", "Ignore genes for LSI clustering (Not DE analysis)", 
                                        choices = c("Ignore Mitochondrial Genes" = "blacklist_mitogenes", 
                                                    "Ignore X/Y chomosomal genes" = "blacklist_sexgenes",
-                                                   "Ignore Ribosomal genes" = "blacklist_rbgenes"),
+                                                   "Ignore Ribosomal genes" = "blacklist_rbgenes",
+                                                   "Ignore ENSG uknown genes" = "blacklist_ensembl"),
                                        selected = c("blacklist_mitogenes", "blacklist_sexgenes", "blacklist_rbgenes")
                                        
                     )
@@ -515,7 +517,8 @@ ui <- dashboardPage(
                     checkboxGroupInput("blacklist_genes_2", "Ignore genes for LSI clustering (Not DE analysis)", 
                                        choices = c("Ignore Mitochondrial Genes" = "blacklist_mitogenes", 
                                                    "Ignore X/Y chomosomal genes" = "blacklist_sexgenes",
-                                                   "Ignore Ribosomal genes" = "blacklist_rbgenes"),
+                                                   "Ignore Ribosomal genes" = "blacklist_rbgenes",
+                                                   "Ignore ENSG uknown genes" = "blacklist_ensembl"),
                                        selected = c("blacklist_mitogenes", "blacklist_sexgenes", "blacklist_rbgenes")
                                        
                     )
@@ -829,7 +832,7 @@ server <- function(input, output, session) {
         display_ui_message(msg)
       }
     }
-    invalidateLater(100) 
+    invalidateLater(0.01) 
   })
   
   
@@ -1647,17 +1650,24 @@ server <- function(input, output, session) {
     }
     
     # Send initial message
-    send_message("Starting preprocessing...")
+    display_ui_message("Starting preprocessing...")
     
     # Get the current Seurat list
     preprocessing_seurat_list <- values$seurat_list
     
     # Progress indication
     withProgress(message = 'Processing...', value = 0, {
+      
+      # Process each method in a specific order to maintain message consistency
+      total_methods <- length(selected_methods)
+      current_method <- 0
+      
+      # Method 1: Doublet Removal
       if ("doublet" %in% selected_methods) {
+        current_method <- current_method + 1
         incProgress(0.1, detail = "Running Doublet Removal...")
         
-        send_message("Starting Doublet Removal, this may take some time...")
+        display_ui_message("Starting Doublet Removal, this may take some time...")
         
         preprocessing_seurat_list <- tryCatch({
           preprocess_DoubletRemoval(preprocessing_seurat_list)
@@ -1666,13 +1676,46 @@ server <- function(input, output, session) {
           return(preprocessing_seurat_list)
         })
         
-        incProgress(0.5)
+        display_ui_message("Doublet Removal completed.")
+        incProgress(0.3)
       }
       
+      # Method 2: Remove Ensembl genes  
+      if ("remove_ensembl" %in% selected_methods) {
+        current_method <- current_method + 1
+        incProgress(0.1, detail = "Removing Ensembl genes...")
+        
+        display_ui_message("Starting Ensembl gene removal...")
+        
+        # Store gene counts before removal
+        genes_before <- sapply(preprocessing_seurat_list, function(obj) nrow(obj))
+        
+        # Remove Ensembl genes from all objects in the list
+        preprocessing_seurat_list <- remove_GenesFromSeuratList(
+          preprocessing_seurat_list, 
+          "remove_ensembl"
+        )
+        
+        # Store gene counts after removal and display results
+        genes_after <- sapply(preprocessing_seurat_list, function(obj) nrow(obj))
+        
+        # Display summary for each dataset
+        for (dataset_name in names(preprocessing_seurat_list)) {
+          genes_removed <- genes_before[dataset_name] - genes_after[dataset_name]
+          display_ui_message(sprintf("  - %s: Removed %d ENSG genes, keeping %d out of %d total genes", 
+                                     dataset_name, genes_removed, genes_after[dataset_name], genes_before[dataset_name]))
+        }
+        
+        display_ui_message("Ensembl gene removal completed.")
+        incProgress(0.2)
+      }
+      
+      # Method 3: Ambient RNA Removal (last because it includes low RNA filtering)
       if ("ambient" %in% selected_methods) {
+        current_method <- current_method + 1
         incProgress(0.1, detail = "Running Ambient RNA Removal...")
         
-        send_message("Starting Ambient RNA Removal...")
+        display_ui_message("Starting Ambient RNA Removal...")
         
         preprocessing_seurat_list <- tryCatch({
           preprocess_AmbientRNA(preprocessing_seurat_list)
@@ -1681,7 +1724,10 @@ server <- function(input, output, session) {
           return(preprocessing_seurat_list)
         })
         
-        send_message("Filtering low RNA cells...")
+        display_ui_message("Ambient RNA Removal completed.")
+        
+        # Now filter low RNA cells
+        display_ui_message("Starting low RNA cell filtering...")
         
         preprocessing_seurat_list <- tryCatch({
           remove_lowRNA(preprocessing_seurat_list)
@@ -1690,27 +1736,28 @@ server <- function(input, output, session) {
           return(preprocessing_seurat_list)
         })
         
+        display_ui_message("Low RNA cell filtering completed.")
         incProgress(0.4)
       }
-
       
-      # Update reactive values
-      values$seurat_list <- preprocessing_seurat_list
-      
-      send_message("Merging datasets to single seurat object")
-      merged_seurat <- merge(x=preprocessing_seurat_list[[1]], 
-                             y=preprocessing_seurat_list[2:length(preprocessing_seurat_list)])
+      # Final steps: Merging and joining layers
+      display_ui_message("Merging datasets into single Seurat object...")
+      merged_seurat <- merge(x = preprocessing_seurat_list[[1]], 
+                             y = preprocessing_seurat_list[2:length(preprocessing_seurat_list)])
       merged_seurat$orig.ident <- as.factor(merged_seurat$orig.ident)
       
-      send_message("Join count layers in seurat object")
+      display_ui_message("Joining count layers in Seurat object...")
       merged_seurat <- SeuratObject::JoinLayers(merged_seurat)
+      
+      # Update reactive values
       values$seurat <- merged_seurat
       values$preprocess_done <- TRUE
       
+      # Clean up
       values$seurat_list <- NULL
       gc()
       
-      send_message("Preprocessing and merging completed successfully!")
+      send_message("Preprocessing completed successfully!")
     })
     
     # Navigate to next tab

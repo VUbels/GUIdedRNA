@@ -7,7 +7,7 @@
 preprocess_DoubletRemoval(seurat_list)
 }
 \arguments{
-\item{seurat_list}{List of Seurat objects}
+\item{seurat_list}{List of Seurat objects.}
 }
 \description{
 Fully runs the doublet removal protocol through DoubletFinder() based on variable from assign_ExpectedDoublet().

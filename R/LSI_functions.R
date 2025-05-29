@@ -306,6 +306,22 @@ generate_GeneBlacklist <- function(count_matrix, selected_blacklist, send_messag
     })
   }
   
+  if("blacklist_ensembl" %in% selected_blacklist) {
+    tryCatch({
+      # Pattern to match Ensembl gene IDs (ENSG followed by numbers and optional version)
+      ensembl.genes <- grep(pattern = "^ENSG[0-9]+", x = gene_names, value = TRUE)
+      
+      if (length(ensembl.genes) > 0) {
+        blacklist.genes <- c(blacklist.genes, ensembl.genes)
+        send_message(sprintf("Added %d Ensembl genes to blacklist.", length(ensembl.genes)))
+      } else {
+        send_message("No Ensembl genes found with pattern ^ENSG")
+      }
+    }, error = function(e) {
+      send_message(paste("Error finding Ensembl genes:", e$message))
+    })
+  }
+  
   # Remove duplicates and ensure character vector
   if (length(blacklist.genes) > 0) {
     blacklist.genes <- unique(as.character(blacklist.genes))

@@ -309,3 +309,84 @@ remove_lowRNA <- function(seurat_list) {
   send_message(paste("Low RNA cell filtering complete for all", total_datasets, "datasets!"))
   return(processed_list)
 }
+
+#' Function to completely remove genes from a list of Seurat objects
+#'
+#' @param seurat_list List of Seurat objects to filter.
+#' @param genes_to_remove vector of gene names to remove completely. If "remove_ensembl" is passed, will automatically detect ENSG genes.
+#' @param send_message function to send messages to the UI (optional).
+#' @return filtered list of Seurat objects.
+#' @export
+#'
+remove_GenesFromSeuratList <- function(seurat_list, genes_to_remove, send_message = NULL) {
+  
+  processed_list <- list()
+  object_list <- names(seurat_list)
+  total_datasets <- length(object_list)
+  
+  send_message(sprintf("Removing genes from %d datasets...", total_datasets))
+  
+  for (i in seq_along(object_list)) {
+    dataset_name <- object_list[i]
+    seurat_obj <- seurat_list[[dataset_name]]
+    
+    # Get current gene names
+    current_genes <- rownames(seurat_obj)
+    
+    # Check if we need to automatically detect ENSG genes
+    if (length(genes_to_remove) == 1 && genes_to_remove == "remove_ensembl") {
+      # Find all genes matching ENSG pattern (case insensitive)
+      # Patterns like: ENSG00000304370.1, ensg00000351123.2, ENSG00000123456, etc.
+      ensg_genes <- current_genes[grepl("^ensg[0-9]+", current_genes, ignore.case = TRUE)]
+      genes_to_remove_existing <- ensg_genes
+      
+      # send_message(sprintf("  - Dataset %s: Found %d ENSG genes to remove", dataset_name, length(ensg_genes)))
+      
+      # if (length(ensg_genes) > 0) {
+      #   # Show some examples of ENSG genes found
+      #   example_genes <- head(ensg_genes, 5)
+      #   send_message(sprintf("  - Examples: %s", paste(example_genes, collapse = ", ")))
+      # }
+      
+    } else {
+      # Original behavior: use provided gene list
+      genes_to_remove_existing <- intersect(genes_to_remove, current_genes)
+      genes_not_found <- setdiff(genes_to_remove, current_genes)
+      
+      if (length(genes_not_found) > 0) {
+        send_message(sprintf("  - Dataset %s: %d genes not found in object.", dataset_name, length(genes_not_found)))
+      }
+    }
+    
+    if (length(genes_to_remove_existing) == 0) {
+      send_message(sprintf("  - Dataset %s: No specified genes found. Keeping original object.", dataset_name))
+      processed_list[[dataset_name]] <- seurat_obj
+      next
+    }
+    
+    # Get genes to keep
+    genes_to_keep <- setdiff(current_genes, genes_to_remove_existing)
+    
+    # send_message(sprintf("  - Dataset %s: Removing %d genes, keeping %d genes out of original %d genes.", 
+    #                      dataset_name, length(genes_to_remove_existing), length(genes_to_keep), length(current_genes)))
+    
+    # Filter the Seurat object
+    tryCatch({
+      # Subset the Seurat object to keep only the desired genes
+      filtered_seurat <- seurat_obj[genes_to_keep, ]
+      processed_list[[dataset_name]] <- filtered_seurat
+      
+    }, error = function(e) {
+      send_message(sprintf("  - Error removing genes from %s: %s", dataset_name, e$message))
+      send_message(sprintf("  - Keeping original %s object.", dataset_name))
+      processed_list[[dataset_name]] <- seurat_obj
+    })
+  }
+  
+  send_message("Gene removal completed for all datasets.")
+
+  
+
+
+  return(processed_list)
+}
