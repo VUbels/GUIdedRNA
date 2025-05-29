@@ -2,14 +2,18 @@
 
 A comprehensive Shiny application for guided RNA-seq analysis including quality control, preprocessing, dimensionality reduction, clustering, and cell type annotation.
 
-## Features
+## Features and workflow
 
-- **Quality Control**: Interactive QC metrics visualization and filtering
-- **Preprocessing**: Doublet removal and ambient RNA correction
-- **LSI Analysis**: Two-round iterative Latent Semantic Indexing
-- **Cell Type Annotation**: Guided clustering and annotation workflow
-- **Integration**: Combine results from multiple analysis rounds
-- **Export**: Comprehensive results export in multiple formats
+1. **Setup**: Upload 10X Genomics data (or any .mtx/barcode/feature combination) or folder containing multiple datasets
+2. **Sample Information**: Add metadata and sample attributes
+3. **Quality Control**: Set filtering parameters and visualize QC metrics
+4. **Preprocessing**: Run doublet removal, unannotated gene removal, and ambient RNA correction
+5. **LSI Round 1**: Initial dimensionality reduction
+6. **Broad Clustering**: Assign broad cell types using marker genes and visualize any gene expression in UMAP
+7. **LSI Round 2**: Refined analysis on cell type subsets
+8. **Final Clustering**: Detailed cell type annotation and visualize any gene expression in UMAP per subcluster
+9. **Integration**: Combine all results into final annotations
+10. **Download**: Export processed data and results
 
 ## Installation and regular use
 
@@ -29,13 +33,15 @@ No technical knowledge required - just double-click and wait!
 
 After building docker container is completed once, subsequently running app is instantaneous.
 
-### For Advanced Users & Developers
+## For Advanced Users & Developers
 WSL2 Users (Windows Subsystem for Linux)  
 If you need Windows drive access and advanced volume mounting:  
+Run through command line with ADVANCED_DEPLOY.sh
 If working through command line simply open in any browser at http://localhost:3838  
 
-### Installation of GUIdedRNA library and use through IDE
+## Installation of GUIdedRNA library and use through IDE
 
+Install prerequisites
 ```r
 # Install devtools
 install.packages("devtools")
