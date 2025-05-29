@@ -11,7 +11,7 @@ A comprehensive Shiny application for guided RNA-seq analysis including quality 
 - **Integration**: Combine results from multiple analysis rounds
 - **Export**: Comprehensive results export in multiple formats
 
-## Installation and use for regular use
+## Installation and regular use
 
 **For Regular Users (Recommended)**
 No technical knowledge required - just double-click and wait!  
