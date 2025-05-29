@@ -31,9 +31,10 @@ No technical knowledge required - just double-click and wait!
 6) Let Docker build container (5-15 minutes)
 7) If browser does not open simply go to http://localhost:3838
 
-**When using app, your directories to upload data are found in host_drives!**
+After building docker container is completed once, subsequently running app is instantaneous. Refresh browser if connection cannot be found.
 
-After building docker container is completed once, subsequently running app is instantaneous. Refresh browser if connection cannot be found. 
+> [!TIP]
+> **When using app, your directories to upload data are found in host_drives!**
 
 ## For Advanced Users & Developers
 WSL2 Users (Windows Subsystem for Linux)  
