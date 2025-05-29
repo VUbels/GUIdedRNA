@@ -14,26 +14,21 @@ A comprehensive Shiny application for guided RNA-seq analysis including quality 
 ### Installation and use for regular use
 
 **For Regular Users (Recommended)**
-No technical knowledge required - just double-click and wait!
+No technical knowledge required - just double-click and wait!  
 
-### Windows Users
-Download this repository (green "Code" button → "Download ZIP")
-Extract to your Desktop
-Double-click INSTALL_AND_RUN.bat
-Wait 5-15 minutes → Browser opens automatically!
-If browser does not open simply go to http://localhost:3838
-
-### Mac/Linux Users
-Download this repository (green "Code" button → "Download ZIP")
-Extract to your Desktop
-Double-click INSTALL_AND_RUN.sh
-Wait 5-15 minutes → Browser opens automatically!
-If browser does not open simply go to http://localhost:3838
+### Windows/IOS/Linux Users
+Download this repository (green "Code" button → "Download ZIP")  
+Extract to your Desktop  
+Download and install https://www.docker.com/products/docker-desktop/  
+Run Docker Desktop  
+Double-click INSTALL_AND_RUN.bat (WINDOWS) or Double-click INSTALL_AND_RUN.sh (IOS/Linux) from GUIdedRNA map  
+Wait 5-15 minutes → Browser opens automatically!  
+If browser does not open simply go to http://localhost:3838  
 
 ### For Advanced Users & Developers
-WSL2 Users (Windows Subsystem for Linux)
-If you need Windows drive access and advanced volume mounting:
-If working through command line simply open in any browser at http://localhost:3838
+WSL2 Users (Windows Subsystem for Linux)  
+If you need Windows drive access and advanced volume mounting:  
+If working through command line simply open in any browser at http://localhost:3838  
 
 ### Installation of GUIdedRNA library and use through IDE
 
