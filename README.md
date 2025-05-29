@@ -21,9 +21,12 @@ No technical knowledge required - just double-click and wait!
 2) Extract to your Desktop  
 3) Download and install https://www.docker.com/products/docker-desktop/  
 4) Run Docker Desktop  
-5) Double-click INSTALL_AND_RUN.bat (WINDOWS) or Double-click INSTALL_AND_RUN.sh (IOS/Linux) from GUIdedRNA map  
-6) Wait 5-15 minutes → Browser opens automatically!  
-7) If browser does not open simply go to http://localhost:3838  
+5) Double-click INSTALL_AND_RUN.bat (WINDOWS)
+5) Double-click INSTALL_AND_RUN.sh (IOS/Linux)
+6) Let Docker build container (5-15 minutes)
+7) If browser does not open simply go to http://localhost:3838
+
+After building docker container is completed once, subsequently running app is instantaneous.
 
 ### For Advanced Users & Developers
 WSL2 Users (Windows Subsystem for Linux)  
