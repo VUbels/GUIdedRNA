@@ -255,6 +255,23 @@ preprocess_AmbientRNA <- function(seurat_list) {
     seurat_obj[["RNA"]]@layers$counts <- as(round(newCounts), "sparseMatrix")
     seurat_obj$estConp <- decon$contamination
     
+    # CRITICAL FIX: Recalculate QC metrics after updating counts
+    send_message(sprintf("  - Recalculating QC metrics for %s after decontamination...", dataset))
+    
+    # Recalculate nFeature_RNA and nCount_RNA with the new counts
+    seurat_obj[["nFeature_RNA"]] <- Matrix::colSums(seurat_obj[["RNA"]]@layers$counts > 0)
+    seurat_obj[["nCount_RNA"]] <- Matrix::colSums(seurat_obj[["RNA"]]@layers$counts)
+    
+    # Recalculate mitochondrial percentage if mitochondrial genes exist
+    if(any(grepl("^MT-", rownames(seurat_obj)))) {
+      seurat_obj[["percent.mt"]] <- Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+    } else if(any(grepl("^mt-", rownames(seurat_obj)))) {
+      seurat_obj[["percent.mt"]] <- Seurat::PercentageFeatureSet(seurat_obj, pattern = "^mt-")
+    } else {
+      # If no mitochondrial genes found, set to 0
+      seurat_obj[["percent.mt"]] <- 0
+    }
+    
     seurat_obj <- subset(seurat_obj)
     
     mean_contamination <- round(mean(decon$contamination) * 100, 2)
