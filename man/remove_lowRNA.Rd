@@ -4,10 +4,27 @@
 \alias{remove_lowRNA}
 \title{Removes cells with deficient RNA after Ambient RNA removal}
 \usage{
-remove_lowRNA(seurat_list)
+remove_lowRNA(
+  seurat_list,
+  min_features = 200,
+  max_features = 5000,
+  min_count = 100,
+  max_count = 3000,
+  max_mito = 20
+)
 }
 \arguments{
 \item{seurat_list}{List of Seurat objects}
+
+\item{min_features}{Minimum number of features (from QC settings)}
+
+\item{max_features}{Maximum number of features (from QC settings)}
+
+\item{min_count}{Minimum RNA count (from QC settings)}
+
+\item{max_count}{Maximum RNA count (from QC settings)}
+
+\item{max_mito}{Maximum mitochondrial percentage (from QC settings)}
 }
 \description{
 Removes cells with deficient RNA after Ambient RNA removal

@@ -189,7 +189,6 @@ preprocess_AmbientRNA <- function(seurat_list) {
     send_message(sprintf("  - Original matrix: %d genes x %d cells, class: %s", 
                          nrow(counts), ncol(counts), class(counts)[1]))
     
-    # SPECIFIC FIX: Check for and handle the matrix dimension issue
     # Use Matrix::rowSums for sparse matrices to avoid dimension issues
     if (is(counts, "sparseMatrix") || is(counts, "dgCMatrix")) {
       expressed_genes <- Matrix::rowSums(counts) > 0
@@ -248,29 +247,14 @@ preprocess_AmbientRNA <- function(seurat_list) {
     newCounts <- decon$decontXcounts
     
     # Add back unexpressed genes and sort according to original counts
-    # CRITICAL: Use drop = FALSE here too
     unexpressed_counts <- counts[!expressed_genes, , drop = FALSE]
     newCounts <- rbind(newCounts, unexpressed_counts)[rownames(counts), , drop = FALSE]
     
     seurat_obj[["RNA"]]@layers$counts <- as(round(newCounts), "sparseMatrix")
     seurat_obj$estConp <- decon$contamination
     
-    # CRITICAL FIX: Recalculate QC metrics after updating counts
     send_message(sprintf("  - Recalculating QC metrics for %s after decontamination...", dataset))
     
-    # Recalculate nFeature_RNA and nCount_RNA with the new counts
-    seurat_obj[["nFeature_RNA"]] <- Matrix::colSums(seurat_obj[["RNA"]]@layers$counts > 0)
-    seurat_obj[["nCount_RNA"]] <- Matrix::colSums(seurat_obj[["RNA"]]@layers$counts)
-    
-    # Recalculate mitochondrial percentage if mitochondrial genes exist
-    if(any(grepl("^MT-", rownames(seurat_obj)))) {
-      seurat_obj[["percent.mt"]] <- Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
-    } else if(any(grepl("^mt-", rownames(seurat_obj)))) {
-      seurat_obj[["percent.mt"]] <- Seurat::PercentageFeatureSet(seurat_obj, pattern = "^mt-")
-    } else {
-      # If no mitochondrial genes found, set to 0
-      seurat_obj[["percent.mt"]] <- 0
-    }
     
     seurat_obj <- subset(seurat_obj)
     
@@ -287,9 +271,14 @@ preprocess_AmbientRNA <- function(seurat_list) {
 #' Removes cells with deficient RNA after Ambient RNA removal
 #'
 #' @param seurat_list List of Seurat objects
+#' @param min_features Minimum number of features (from QC settings)
+#' @param max_features Maximum number of features (from QC settings)  
+#' @param min_count Minimum RNA count (from QC settings)
+#' @param max_count Maximum RNA count (from QC settings)
+#' @param max_mito Maximum mitochondrial percentage (from QC settings)
 #' @export
 
-remove_lowRNA <- function(seurat_list) {
+remove_lowRNA <- function(seurat_list, min_features = 200, max_features = 5000, min_count = 100, max_count = 3000, max_mito = 20) {
   
   processed_list <- list()
   object_list <- names(seurat_list)
@@ -299,8 +288,6 @@ remove_lowRNA <- function(seurat_list) {
   
   for (i in seq_along(object_list)) {
     dataset <- object_list[i]
-    
-    # Access the dataset using the name
     seurat_obj <- seurat_list[[dataset]]
     
     # Get dimensions before filtering
@@ -308,8 +295,26 @@ remove_lowRNA <- function(seurat_list) {
     
     send_message(paste("Filtering dataset", i, "of", total_datasets, ":", dataset))
     
-    # Filter cells with low RNA
-    seurat_obj <- subset(seurat_obj, subset = c(nFeature_RNA > 100 & nCount_RNA > 500))
+    # Get current QC metrics directly from the Seurat object
+    current_nFeature <- seurat_obj$nFeature_RNA
+    current_nCount <- seurat_obj$nCount_RNA  
+    current_percent_mt <- seurat_obj$percent.mt
+    
+    # Apply the same QC filters as originally set
+    cells_to_keep <- which(
+      current_nFeature >= min_features & 
+        current_nFeature <= max_features &
+        current_nCount >= min_count & 
+        current_nCount <= max_count &
+        current_percent_mt <= max_mito
+    )
+    
+    # Subset the Seurat object to keep only cells that pass QC
+    if (length(cells_to_keep) > 0) {
+      seurat_obj <- seurat_obj[, cells_to_keep]
+    } else {
+      send_message(sprintf("  - WARNING: No cells in %s pass QC filters after ambient RNA removal!", dataset))
+    }
     
     # Get dimensions after filtering
     nPostDecon <- ncol(seurat_obj)

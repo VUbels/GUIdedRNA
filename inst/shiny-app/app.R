@@ -1726,11 +1726,16 @@ server <- function(input, output, session) {
         
         display_ui_message("Ambient RNA Removal completed.")
         
-        # Now filter low RNA cells
+        # Now filter low RNA cells using the original QC parameters
         display_ui_message("Starting low RNA cell filtering...")
         
         preprocessing_seurat_list <- tryCatch({
-          remove_lowRNA(preprocessing_seurat_list)
+          remove_lowRNA(preprocessing_seurat_list, 
+                        min_features = input$minFeatures,
+                        max_features = input$maxFeatures,
+                        min_count = input$minCount,
+                        max_count = input$maxCount,
+                        max_mito = input$maxMito)
         }, error = function(e) {
           send_message(paste("Error in Low RNA Filtering:", e$message))
           return(preprocessing_seurat_list)
