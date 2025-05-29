@@ -31,7 +31,7 @@ No technical knowledge required - just double-click and wait!
 6) Let Docker build container (5-15 minutes)
 7) If browser does not open simply go to http://localhost:3838
 
-After building docker container is completed once, subsequently running app is instantaneous. Refresh browser if connection cannot be found.
+After docker container is build once, subsequently running app is instantaneous and can be done through docker desktop. Refresh browser if connection cannot be found.
 
 > [!TIP]
 > **When using app, your directories to upload data are likely found in root >> host_drives!**
