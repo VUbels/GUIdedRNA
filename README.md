@@ -34,7 +34,7 @@ No technical knowledge required - just double-click and wait!
 After building docker container is completed once, subsequently running app is instantaneous. Refresh browser if connection cannot be found.
 
 > [!TIP]
-> **When using app, your directories to upload data are found in host_drives!**
+> **When using app, your directories to upload data are likely found in root >> host_drives!**
 
 ## For Advanced Users & Developers
 WSL2 Users (Windows Subsystem for Linux)  
