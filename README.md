@@ -57,7 +57,7 @@ If working through command line simply open in any browser at http://localhost:3
 Install prerequisites
 ```r
 # Install devtools
-install.packages("devtools")
+install.packages("devtools", 'fields', 'KernSmooth', 'ROCR', 'parallel')
 
 # Install BiocManager dependencies
 install.packages("BiocManager", repos = "https://cloud.r-project.org")
