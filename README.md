@@ -34,7 +34,7 @@ No technical knowledge required - just double-click and wait!
 After docker container is build once, subsequently running app is instantaneous and can be done through docker desktop or by double-clicking INSTALL_AND_RUN again. Refresh browser if connection cannot be found.
 
 > [!TIP] 
-> **When using app, your directories to upload data and set the output directory are likely found in by changing volume: home to root >> files are found under host_drives.**
+> **When using app, your directories to upload data and set the output directory are likely found by changing volume: home to root >> files are found under host_drives.**
 
 > [!NOTE]
 > **On IOS/Linux if you can't double click INSTALL_AND_RUN.sh you might need to run the following in command line to make the file executable.**  
