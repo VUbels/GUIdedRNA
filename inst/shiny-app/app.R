@@ -875,9 +875,6 @@ server <- function(input, output, session) {
   # Define volumes in a platform-agnostic way
   volumes <- c()
   
-  # Add home directory (works on all platforms)
-  volumes <- c(volumes, Home = fs::path_home())
-  
   # Add root for Linux/Mac
   if (.Platform$OS.type == "unix") {
     volumes <- c(volumes, "Root" = "/")
@@ -912,6 +909,9 @@ server <- function(input, output, session) {
     }
   }
   
+  # Add home directory (works on all platforms)
+  volumes <- c(volumes, Home = fs::path_home())
+
   # Initialize directory chooser for input
   shinyDirChoose(input, "folderBtn_single", roots = volumes, session = session)
   
