@@ -952,37 +952,46 @@ server <- function(input, output, session) {
   
   # Data loading logic single dataset
   observeEvent(input$loadData_file, {
-    req(input$matrixFile, input$featuresFile, input$barcodesFile)
+  req(input$matrixFile, input$featuresFile, input$barcodesFile)
+  
+  withProgress(message = 'Loading data...', {
+    # Create temporary directory
+    temp_dir <- tempdir()
+    matrix_path <- file.path(temp_dir, "matrix.mtx")
+    features_path <- file.path(temp_dir, "features.tsv")
+    barcodes_path <- file.path(temp_dir, "barcodes.tsv")
     
-    withProgress(message = 'Loading data...', {
-      # Create temporary directory
-      temp_dir <- tempdir()
-      matrix_path <- file.path(temp_dir, "matrix.mtx")
-      features_path <- file.path(temp_dir, "features.tsv")
-      barcodes_path <- file.path(temp_dir, "barcodes.tsv")
-      
-      # Save uploaded files
-      file.copy(input$matrixFile$datapath, matrix_path)
-      file.copy(input$featuresFile$datapath, features_path)
-      file.copy(input$barcodesFile$datapath, barcodes_path)
-      
-      # Read data
-      counts <- Seurat::ReadMtx(
-        mtx = matrix_path,
-        features = features_path,
-        cells = barcodes_path
-      )
-      
-      # Create Seurat object
-      seurat_obj <- Seurat::CreateSeuratObject(counts = counts)
-      
-      # Calculate percent mitochondrial
-      seurat_obj[["percent.mt"]] <- Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
-      
-      # Store in reactive values
-      values$seurat_list <- seurat_obj
-      values$original_seurat_list <- seurat_obj
-    })
+    # Save uploaded files
+    file.copy(input$matrixFile$datapath, matrix_path)
+    file.copy(input$featuresFile$datapath, features_path)
+    file.copy(input$barcodesFile$datapath, barcodes_path)
+    
+    # Read data
+    counts <- Seurat::ReadMtx(
+      mtx = matrix_path,
+      features = features_path,
+      cells = barcodes_path
+    )
+    
+    # Create Seurat object
+    seurat_obj <- Seurat::CreateSeuratObject(counts = counts, project = "SingleDataset")
+    
+    # Calculate percent mitochondrial
+    seurat_obj[["percent.mt"]] <- if(any(grepl("^MT-", rownames(seurat_obj)))) {
+      # Human mitochondrial genes
+      Seurat::PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+    } else if(any(grepl("^mt-", rownames(seurat_obj)))) {
+      # Mouse/rat mitochondrial genes
+      Seurat::PercentageFeatureSet(seurat_obj, pattern = "^mt-")
+    } else {
+      # If neither pattern exists, create a zero vector as fallback
+      rep(0, ncol(seurat_obj))
+    }
+    
+    # FIXED: Store as a LIST containing the Seurat object, not as a single object
+    values$seurat_list <- list("SingleDataset" = seurat_obj)
+    values$original_seurat_list <- list("SingleDataset" = seurat_obj)
+  })
     
     # Show data summary
     output$dataSummary <- renderPrint({
@@ -1691,7 +1700,7 @@ server <- function(input, output, session) {
         genes_before <- sapply(preprocessing_seurat_list, function(obj) nrow(obj))
         
         # Remove Ensembl genes from all objects in the list
-        preprocessing_seurat_list <- remove_GenesFromSeuratList(
+        preprocessing_seurat_list <- GUIdedRNA::remove_GenesFromSeuratList(
           preprocessing_seurat_list, 
           "remove_ensembl"
         )
